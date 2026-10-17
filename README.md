@@ -1,58 +1,73 @@
-# KRS inflow and end-of-monsoon storage forecast
+# Monsoon inflow outlook: KRS and Hemavathy
 
 WELL Labs Water Data Hackathon, Theme 2 (reservoir storage assessment using inflow forecasts), Question 3:
 
 > Can we use past rainfall and reservoir storage data to forecast end-of-monsoon reservoir storage? How early can engineers make a reasonably informed estimate?
 
-We answer it for **Krishnaraja Sagar (KRS)** on the Cauvery, with 30 September as the end of the monsoon. We use IMD 0.25° gridded rainfall over the KRS watershed and daily records for KRS and the two upstream dams, Harangi and Hemavathy, for 1991–2025.
+We answer it for two Cauvery dams, **Krishnaraja Sagar (KRS)** and **Hemavathy**, by forecasting the **total June–September inflow**. We use IMD 0.25° gridded daily rainfall over each catchment and daily dam records for KRS, Hemavathy and Harangi, for 1991–2025.
 
-**Report:** [`outputs/KRS_inflow_report.html`](outputs/KRS_inflow_report.html) is a single self-contained file. Download it and open it in any browser; it works offline. It has six tabs: data exploration, every data fix, the daily inflow model, the 30-Sep storage forecast, peak prediction, and the full method for reproducibility.
+## Reports
+
+Two self-contained, chart-led reports. Each is a single file that works offline: download it and open it in any browser. GitHub does not render HTML.
+
+- [`outputs/KRS_insights.html`](outputs/KRS_insights.html)
+- [`outputs/Hemavathy_insights.html`](outputs/Hemavathy_insights.html)
+
+Each report covers:
+1. **The monsoon, year by year.** Rainfall, inflow, outflow and 30-Sep storage for every year, with the same dry years highlighted throughout, and how these four relate to each other.
+2. **Forecasting the monsoon inflow.** Forecast error by the date the forecast is made, with and without a rain forecast, and forecast vs actual for each year.
+3. **How the catchment responds.** How much inflow rain produces and after what delay, as a map of each grid cell's multiplier and delay, plus the daily model against observations.
+4. **Flood warning.** How many days ahead high flows can be predicted.
+5. **Supporting detail.** Data fixes and the method.
 
 ## Key results
 
-All scores are on data the models never saw: 2020–2025 for daily inflow, leave-one-year-out over 1991–2025 for the season forecast.
+Results are on data the models never saw. The monsoon total is scored by leaving out one year at a time over 1991–2025; the daily model is tested on 2020–2025.
 
-**Daily inflow**
-- Using only rainfall and upstream releases, the model scores Nash–Sutcliffe efficiency **0.90**. "Same as yesterday" scores 0.86. Adding the last week of KRS inflow raises the model to 0.93.
-- Upstream releases reach KRS within **0–2 days**. Rain effects peak after about **2 days** and last about a week.
-- The western (Ghats) grid cells produce about 3× more inflow per mm of rain than cells near the dam.
-- Soil wetness (rain over the past weeks) is the most important input.
+**Monsoon-total forecast.** A forecast counts as reliable when it is within ±20% in 4 years out of 5.
 
-**Peaks**
-- On days when inflow jumps by 5,000+ cusecs, the model predicts **87% of the jump on the same day**. "Same as yesterday" catches 0%.
-- **1 day ahead:** peak size about 13% low (median), 65% of peaks within ±25%, 77% of high-flow days detected.
-- **2 days ahead:** still says whether a peak is coming, but underestimates its size by about a third.
-- **3 days or more:** needs a rainfall forecast.
+| Forecast made on | KRS, typical error | KRS, 4 years in 5 within | Hemavathy, typical error | Hemavathy, 4 years in 5 within |
+|---|---|---|---|---|
+| Assume an average year | 37% | — | 26% | — |
+| 1 Jul | 33% | 52% | 26% | 44% |
+| 1 Aug | 17% | 28% | 16% | 29% |
+| 1 Aug + 30-day rain forecast* | 11% | **16%** | 7% | **13%** |
+| **15 Aug** | **11%** | **19%** | **7%** | **15%** |
+| 1 Sep | 7% | 14% | 5% | 9% |
 
-**30-Sep storage, by forecast date**
+\*Actual rainfall used as a perfect forecast, so this is an upper bound on what a real forecast could add.
 
-| Forecast made on | Typical error (RMSE, TMC) | "Will KRS be ≥90% full?" correct |
-|---|---|---|
-| 1 Jun | 11.6 (no better than the long-term average) | 54% |
-| 1 Aug | 9.3 | 69% |
-| 15 Aug | 6.6 | 77% |
-| 1 Sep | 4.0 | 83% |
-| 15 Sep | 2.4 | 89% |
+- **A reasonably informed estimate is possible from 15 August**, or from 1 August if a 30-day rain forecast is available.
+- **Before July the model is no better than assuming an average year.** A median of about 55% of the season's inflow arrives after 1 August.
+- **Monsoon inflow varies hugely from year to year:** KRS 41–252 TMC, Hemavathy 25–115 TMC.
 
-**A reasonably informed estimate is possible from mid-August.** Before that, the outcome depends on rain that has not fallen yet. KRS design capacity is 49.45 TMC.
+**Year by year**
+- **Dry years compound:** KRS gets 20% less rain, 55% less inflow, and ends September 64% full instead of 94%.
+- **KRS ends September at least 90% full in 19 of 21 years with more than 86 TMC of monsoon inflow.** Below that it does so in only 3 of 14 years.
+- **Each extra 100 mm of rain** adds about 17 TMC of inflow at KRS and 9 TMC at Hemavathy.
+
+**Daily inflow and flood warning**
+- **The daily model fits well.** On the Nash–Sutcliffe score (NSE: 1 = perfect, 0 = no better than the long-term average), KRS scores 0.91 from rain plus upstream releases, and Hemavathy 0.80 from rain alone.
+- **Upstream releases reach KRS within a day.** Rain takes 1–2 days to arrive and keeps flowing for about a week.
+- **Every rain cell has its own multiplier and delay.** 6 of 18 KRS cells and 5 of 9 Hemavathy cells barely affect inflow.
+- **Learning a separate response for every cell helps:** NSE rises from 0.74 to 0.80 at Hemavathy and from 0.89 to 0.91 at KRS.
+- **High-flow warning:** 1 day ahead catches 86% (KRS) and 79% (Hemavathy) of high-flow days. At 3 days ahead this drops to 58% and 50%; with a rain forecast it is 73% and 65%.
 
 ## Repository layout
 
 ```
 src/
-  prepare.py           # cleaning: reservoirs + IMD rainfall clipped to the watershed
-  inflow_model.py      # daily inflow models, lag-response (amount and delay) model
-  season_forecast.py   # 30-Sep storage forecast by forecast date
-  peak_analysis.py     # peak timing, size and high-flow detection
-  lead_time.py         # predicting inflow 1-7 days ahead, with 80% intervals
-  one_shot.py          # single end-of-monsoon forecast and "will KRS fill?" probability
-  export_dashboard.py  # tidy tables for the report
-  build_report.py      # builds outputs/KRS_inflow_report.html
-  report/              # report page template, peak and approach tabs
-  vendor/              # d3 v7.9.0 (embedded so the report works offline)
+  prepare.py            # cleaning: reservoirs + IMD rainfall clipped to the KRS watershed (logs every fix)
+  inflow_model.py       # KRS daily inflow model, lag response, input importance
+  dam_analysis.py       # both dams: daily model, monsoon-total forecast, lead time, river-network tests
+  cell_response.py      # per-grid-cell multiplier and delay ("routed rain"), maps
+  build_dam_reports.py  # builds outputs/KRS_insights.html and outputs/Hemavathy_insights.html
+  peak_analysis.py      # KRS peak events (thresholds used by the analyses)
+  season_forecast.py, one_shot.py, lead_time.py   # earlier KRS-only analyses (30-Sep storage)
+  vendor/               # d3 v7.9.0 (embedded so the reports work offline)
 outputs/
-  KRS_inflow_report.html
-requirements.txt
+  KRS_insights.html
+  Hemavathy_insights.html
 ```
 
 ## Data (not included)
@@ -64,6 +79,8 @@ The input data is not in this repository. To rerun, place it as follows:
 | `data/KR_reservior.xlsx`, `data/Hemavathy_reserviour.xlsx`, `data/Harangi_reserviour.xlsx` | Daily % full, gross storage (TMC), inflow and outflow (cusecs). Columns: `Date` (DD-MM-YYYY), `% of Storage as on this day`, `Gross Storage (TMC)`, `Inflow (Cusecs)`, `OutFlow (Cusecs)` | K-WRIS reservoir records |
 | `data/IMD_Gridded_1991_2025/Rainfall_ind<year>_rfp25.grd` | IMD 0.25° daily gridded rainfall, one binary file per year | IMD Pune |
 | `watershed_KSR/watershed.shp` (+ `.shx`, `.dbf`, `.prj`) | KRS catchment polygon | India-WRIS hydrological layers |
+| `data/watershed_hemavati.zip` | Hemavathy catchment polygon (zipped shapefile) | as above |
+| `data/rivers_ksr.zip`, `data/rivers_hemavati.zip` | River flowlines with stream order (zipped shapefiles) | as above |
 
 ## Reproduce
 
@@ -73,35 +90,34 @@ Python 3.12. From the repository root:
 uv venv .venv -p 3.12
 uv pip install -p .venv -r requirements.txt
 
-.venv/bin/python src/prepare.py          # -> data/processed/, outputs/data_fixes.json
-.venv/bin/python src/inflow_model.py     # -> outputs/inflow_results.json
-.venv/bin/python src/season_forecast.py  # -> outputs/season_results.json
-.venv/bin/python src/peak_analysis.py    # -> outputs/peak_results.json
-.venv/bin/python src/export_dashboard.py # -> outputs/dash/*.json
-.venv/bin/python src/build_report.py     # -> outputs/KRS_inflow_report.html
-
-# extra analyses (run from src/ so they can import the other scripts)
-cd src && ../.venv/bin/python lead_time.py && ../.venv/bin/python one_shot.py
+cd src
+../.venv/bin/python prepare.py            # -> data/processed/, outputs/data_fixes.json
+../.venv/bin/python inflow_model.py       # -> outputs/inflow_results.json
+../.venv/bin/python peak_analysis.py      # -> outputs/peak_results.json
+../.venv/bin/python dam_analysis.py       # -> outputs/dam_results.json
+../.venv/bin/python cell_response.py      # -> outputs/cell_response.json
+../.venv/bin/python build_dam_reports.py  # -> outputs/KRS_insights.html, outputs/Hemavathy_insights.html
 ```
 
 Random seeds are fixed, so a rerun gives the same numbers. Plain `pip install -r requirements.txt` in any Python 3.12 environment works too.
 
 ## Method in brief
 
-1. **Cleaning.** We fix header offsets, missing days, storage above design capacity, single-day storage spikes and zero monsoon inflow, and interpolate gaps of 3 days or less. Water-balance mismatches are flagged but not changed. Every fix is listed in the report.
-2. **Rainfall.** We keep the 24 IMD cells that overlap the watershed, weight each by the share of its area inside, and group them into near, mid and far bands by distance to the dam.
-3. **Daily inflow.** Gradient boosting on log inflow. Inputs are rain by band over the last 7 days, 3–60 day rain totals, soil wetness, Harangi and Hemavathy releases over the last 5 days, and time of year. Training uses a time-based split: train 1991–2014, validate 2015–2019, test 2020–2025.
-4. **Amount and delay.** A non-negative linear model of inflow on rain and upstream releases at delays of 0–10 days.
-5. **30-Sep storage.** For each forecast date, a model predicts the storage change from that date to 30 Sep. Inputs are storage, inflow and releases so far, and rain so far. It is scored with leave-one-year-out cross-validation.
-
-The **Approach & reproducibility** tab of the report has the full details and the limitations.
+1. **Cleaning.** All fixes are listed in each report.
+   - Fixes: header offsets, missing days, storage above design capacity, single-day storage spikes and zero monsoon inflow. Gaps of 3 days or less are interpolated.
+   - **Outflow recorded in the wrong units:** from 10 July to 18 September 2019, all three dams report decimal "outflows" such as 5.1 cusecs during the August 2019 flood. These days are replaced by the water-balance outflow (inflow minus change in storage). Harangi has the same problem in July 2004.
+   - Water-balance mismatches, and June 2012 (533 mm of rain but very little inflow), are flagged but not changed.
+2. **Rainfall.** IMD cells overlapping each catchment, each weighted by its share of area inside the catchment.
+3. **Per-cell response.** A non-negative linear model learns, for every cell, how much of its rain reaches the dam on each of the next 14 days. Wetter soil yields more inflow from the same rain. For KRS, rain above Hemavathy dam is left out: it reaches KRS only through Hemavathy's releases, which are already an input. The output ("routed rain") feeds the daily model.
+4. **Daily inflow.** Gradient boosting on log inflow. Inputs are routed rain, rain lags by distance band, rain totals, soil wetness, upstream releases (KRS only) and time of year. Trained on 1991–2019, tested on 2020–2025.
+5. **Monsoon total.** The forecast is the inflow already measured since 1 June plus the predicted remaining inflow. A ridge regression is fitted for each forecast date, scored by leaving one year out at a time. The rain-forecast variants add the actual rain of the following 7–30 days, which makes them a best case.
 
 ## Limitations
 
-- Releases from KRS are operator decisions (irrigation, interstate water-sharing obligations) and cannot be predicted from rainfall.
-- Upstream canal diversions are not in the data.
-- Forecasts made before August need a seasonal monsoon outlook to add skill.
-- Distance bands are only a proxy for how long water takes to reach the dam. A DEM-based sub-catchment split, and evapotranspiration data, are natural next steps.
+- Releases are operator decisions (irrigation, interstate water-sharing obligations); the models take upstream releases as known.
+- The Harangi catchment boundary is not available, so rain above Harangi dam cannot be separated from rain that drains straight to KRS.
+- Small edge cells have unreliable per-cell multipliers; the reports fade them out.
+- The rain-forecast results use actual rainfall, so they overstate what a real forecast can deliver.
 
 ## Contributing
 

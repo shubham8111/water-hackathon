@@ -7,5 +7,6 @@
 !/src/
 !/outputs/
 /outputs/*
-!/outputs/KRS_inflow_report.html
+!/outputs/KRS_insights.html
+!/outputs/Hemavathy_insights.html
 /src/__pycache__/

@@ -123,6 +123,20 @@ def load_reservoir(name, fname):
                 n_na, f"{n_filled} filled, {filled.isna().sum()} left missing")
         df[c] = filled
 
+    # Outflow is reported in whole cusecs. A month with many decimal values (e.g. 5.12, 12.71
+    # during the Aug 2019 flood) holds a different quantity, not cusecs. Those days are replaced
+    # by the water-balance outflow: inflow - storage change.
+    frac = df["outflow"].notna() & ((df["outflow"] - df["outflow"].round()).abs() > 1e-6)
+    bad_month = frac.groupby(df.index.to_period("M")).transform("sum") >= 15
+    bad = frac & bad_month
+    if bad.sum():
+        implied = (df["inflow"] - df["storage"].diff() / CUSEC_DAY_TO_TMC).clip(lower=0)
+        log_fix(name, "Outflow not in cusecs (decimal values, far too small; e.g. Jul-Sep 2019)",
+                "Replaced with water-balance outflow: inflow - storage change", int(bad.sum()),
+                f"{df.index[bad].min():%Y-%m-%d} .. {df.index[bad].max():%Y-%m-%d}; reported total "
+                f"{df.loc[bad, 'outflow'].sum() * CUSEC_DAY_TO_TMC:.2f} TMC -> {implied[bad].sum() * CUSEC_DAY_TO_TMC:.1f} TMC")
+        df.loc[bad, "outflow"] = implied[bad].round()
+
     # Mass-balance check (reported only): change in storage vs. (inflow - outflow)
     resid = df["storage"].diff() - (df["inflow"] - df["outflow"]).shift(0) * CUSEC_DAY_TO_TMC
     big = resid.abs() > 1.0
@@ -204,6 +218,17 @@ def main():
     log_fix("merged", "Reservoir data runs to 2026-10-17 but rainfall ends 2025-12-31",
             "Modelling window restricted to 1991-01-01 .. 2025-12-31",
             len(res) - len(df))
+    # Months with very high catchment rain but very low KRS inflow: possible rainfall-grid issue
+    # (or very dry soil). Reported only.
+    mon = df[df.index.month.isin([6, 7, 8, 9])]
+    m = pd.DataFrame({"rain": mon.rain_basin.resample("MS").sum(), "inflow": mon.krs_inflow.resample("MS").mean()}).dropna()
+    m = m[m.index.month.isin([6, 7, 8, 9])]
+    m["inflow_rank"] = m.groupby(m.index.month).inflow.rank(pct=True)
+    odd = m[(m.rain >= m.rain.quantile(0.9)) & (m.inflow_rank <= 0.25)]
+    if len(odd):
+        log_fix("merged", "Monsoon month with top-10% catchment rain but bottom-25% KRS inflow",
+                "Flagged only (possible IMD grid issue or very dry soil); not modified", len(odd),
+                [f"{t:%b %Y}: {r.rain:.0f} mm, mean inflow {r.inflow:.0f} cusecs" for t, r in odd.iterrows()])
     df.index.name = "date"
     df.to_parquet(OUT / "daily.parquet")
     res.to_parquet(OUT / "reservoirs_full.parquet")
