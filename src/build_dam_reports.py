@@ -73,6 +73,35 @@ def eda(dam, df, R):
     return t.to_dict("records"), st
 
 
+def ladder(dam, R, cc):
+    """Every daily-inflow approach we tried, scored the same way on 2020-2025."""
+    daily, rp, bp, pk = R["daily"], R["river_experiments"], R["baseline_peaks"], R["peaks"]
+    fromd = lambda k: (daily[k]["all"]["NSE"], (bp.get(k) or pk.get(k)))
+    fromr = lambda k: (rp[k]["all"]["NSE"], rp[k]["peaks"])
+    fromc = lambda k: (cc[k]["NSE"], cc[k])
+    if dam == "krs":
+        items = [("Simple baselines", "Average for the day of year", fromd("krs|Climatology")),
+                 ("Simple baselines", "Same as yesterday", fromd("krs|Persistence (yesterday)")),
+                 ("Rain only", "Rain grouped in 3 distance bands", fromr("krs (rain only)|Straight-line bands")),
+                 ("Rain only", "Rain with per-cell response", fromd("krs|Rain only")),
+                 ("Rain + upstream releases", "Rain in 3 distance bands", fromc("Current: distance bands")),
+                 ("Rain + upstream releases", "Bands by distance along the river", fromr("krs|River-distance bands")),
+                 ("Rain + upstream releases", "Raw rain of every cell", fromc("+ raw rain of every cell (lags 0-5)")),
+                 ("Rain + upstream releases", "Per-cell response (used in this report)", fromc("+ per-cell routed rain")),
+                 ("Adding last week's inflow", "Per-cell response + last week's inflow", fromd("krs|Rain + upstream + past inflow"))]
+    else:
+        items = [("Simple baselines", "Average for the day of year", fromd("hemavathy|Climatology")),
+                 ("Simple baselines", "Same as yesterday", fromd("hemavathy|Persistence (yesterday)")),
+                 ("Rain", "Rain in 3 distance bands", fromc("Current: distance bands")),
+                 ("Rain", "Bands by distance along the river", fromr("hemavathy|River-distance bands")),
+                 ("Rain", "Raw rain of every cell", fromc("+ raw rain of every cell (lags 0-5)")),
+                 ("Rain", "Per-cell response (used in this report)", fromd("hemavathy|Rain only")),
+                 ("Adding last week's inflow", "Per-cell response + last week's inflow", fromd("hemavathy|Rain + past inflow"))]
+    return [{"group": g, "label": lab, "nse": round(float(n), 3), "peak": p["peak_median_err_pct"],
+             "within25": round(p["peak_within_25pct"] * 100), "rise": round(p["rise_capture_median"] * 100),
+             "final": "used in this report" in lab} for g, lab, (n, p) in items]
+
+
 def dam_data(dam, R, inflow, fixes, CR, df):
     mi = R["monsoon_inflow"][dam]
     fc = []
@@ -96,6 +125,14 @@ def dam_data(dam, R, inflow, fixes, CR, df):
          "hydro": R["hydrograph"][dam], "lead": R["lead_time"][dam],
          "fixes": [f for f in fixes if f["dataset"] == dam]}
     d["at"] = {f["issue"]: f for f in fc}
+    d["ladder"] = ladder(dam, R, CR[dam]["daily_comparison"])
+    order = [("Assume an average year", None), ("Model, no rain forecast", NONE), ("+ next 7 days of rain", "+ next 7 days of rain"),
+             ("+ next 15 days of rain", "+ next 15 days"), ("+ next 30 days of rain", F30), ("+ all rain up to 30 Sep", "+ rest of season (to 30 Sep)")]
+    d["matrix"] = {"issues": [issue_label(r["issue_date"]) for r in mi["by_issue"]],
+                   "rows": [{"label": lab,
+                             "p80": [r["climatology_p80_abs_pct_err"] if k is None else r[k]["p80_abs_pct_err"] for r in mi["by_issue"]],
+                             "med": [r["climatology_median_abs_pct_err"] if k is None else r[k]["median_abs_pct_err"] for r in mi["by_issue"]]}
+                            for lab, k in order]}
     d["eda"], d["eda_stats"] = eda(dam, df, R)
     cr = CR[dam]
     d["cells"], d["geo"], d["held"] = cr["cells"], cr["geo"], cr.get("held_by_hemavathy", [])
@@ -165,6 +202,23 @@ header p { margin:0; color:var(--ink2); max-width:70ch; }
 .row3 { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
 .row3 > div h3 { font-size:.9rem; margin:0 0 6px; font-weight:600; min-height:2.7em; }
 @media (max-width:900px) { .row3 { grid-template-columns:1fr; } .row3 > div h3 { min-height:0; } }
+.flow { margin-top:8px; }
+.stage { display:grid; grid-template-columns:170px 1fr; gap:16px; align-items:start; }
+.stage .sh { font-weight:650; font-size:.95rem; padding-top:10px; }
+.stage .sh span { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--ink); color:#fff; font-size:.8rem; margin-right:8px; }
+.stage .sh small { display:block; font-weight:400; color:var(--ink2); font-size:.8rem; margin:4px 0 0 32px; }
+.nodes { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:10px; }
+.nodes.two { grid-template-columns:1fr 1fr; }
+.nodes.four { grid-template-columns:repeat(4,1fr); }
+.node { border:1px solid var(--line); border-left:4px solid var(--c, var(--ink3)); border-radius:10px; padding:10px 12px; background:#fff; font-size:.85rem; color:var(--ink2); }
+.node b { display:block; color:var(--ink); font-size:.9rem; margin-bottom:3px; }
+.node ul { margin:4px 0 0; padding-left:16px; } .node li { margin:2px 0; }
+.node .out { margin-top:6px; color:var(--ink); }
+.down { height:30px; margin-left:186px; position:relative; }
+.down::before { content:""; position:absolute; left:50%; top:4px; bottom:8px; border-left:2px solid var(--axis); }
+.down::after { content:""; position:absolute; left:calc(50% - 6px); bottom:2px; border:6px solid transparent; border-top:8px solid var(--axis); border-bottom:0; }
+.n-data { --c:#7d8893; } .n-prep { --c:#2a78d6; } .n-model { --c:#eb6834; } .n-out { --c:#1d7a43; }
+@media (max-width:760px) { .stage { grid-template-columns:1fr; gap:6px; } .down { margin-left:0; } .nodes.two { grid-template-columns:1fr; } .nodes.four { grid-template-columns:1fr 1fr; } }
 h2.sec { font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; color:var(--ink2); margin:40px 0 -6px; font-weight:600; }
 .row2 > div h3 { font-size:.95rem; margin:0 0 4px; font-weight:600; }
 @media (max-width:760px) { .row2 { grid-template-columns:1fr; } .card { padding:18px 16px; } header h1 { font-size:1.6rem; } }
@@ -496,6 +550,64 @@ function cellMap(id, lid, key, ramp, fmt, title) {
     `<span><i class="area" style="background:${color(mx)};opacity:.45"></i>faded = small edge cell</span>`;
 }
 
+function chartLadder() {
+  const L = D.ladder, el = document.getElementById('c-ladder');
+  const W = el.clientWidth, narrow = W < 700, rowH = 30, gH = 26;
+  let yy = 0; const pos = [];
+  L.forEach((r, i) => { if (i === 0 || r.group !== L[i - 1].group) yy += gH; pos.push(yy); yy += rowH; });
+  const lw = narrow ? 0 : Math.min(300, W * 0.34), pw = narrow ? (W - 24) / 2 : (W - lw - 40) / 2;
+  const top = 26, H = top + yy + 10 + (narrow ? 0 : 0);
+  el.innerHTML = '';
+  const svg = d3.select(el).append('svg').attr('width', W).attr('height', H + (narrow ? L.length * 16 : 0));
+  const xN = d3.scaleLinear().domain([0, 1]).range([0, pw - 50]);
+  const xP = d3.scaleLinear().domain([0, 100]).range([0, pw - 50]);
+  const x0 = lw + (narrow ? 0 : 12), x1 = x0 + pw + 16;
+  svg.append('text').attr('class', 'lbl').attr('x', x0).attr('y', 14).text('Daily accuracy (NSE)');
+  svg.append('text').attr('class', 'lbl2').attr('x', x0 + 130).attr('y', 14).text('higher is better');
+  svg.append('text').attr('class', 'lbl').attr('x', x1).attr('y', 14).text('Flood peaks: size error');
+  svg.append('text').attr('class', 'lbl2').attr('x', x1 + 150).attr('y', 14).text('shorter is better');
+  const off = (i) => narrow ? i * 16 : 0;
+  L.forEach((r, i) => {
+    const y = top + pos[i] + off(i);
+    if (i === 0 || r.group !== L[i - 1].group)
+      svg.append('text').attr('x', 0).attr('y', y - 8).attr('class', 'lbl2').attr('font-weight', 600).attr('letter-spacing', '.04em').text(r.group.toUpperCase());
+    const col = r.final ? C.blue : r.group === 'Simple baselines' ? '#d3d9df' : '#9aa6b2';
+    const by = narrow ? y + 14 : y + 3;
+    svg.append('text').attr('x', narrow ? 0 : lw).attr('y', narrow ? y + 6 : y + 15).attr('text-anchor', narrow ? 'start' : 'end')
+      .attr('class', r.final ? 'lbl' : 'lbl2').attr('fill', C.ink).text(r.label);
+    const n = Math.max(0, r.nse);
+    svg.append('rect').attr('x', x0).attr('y', by).attr('height', 16).attr('width', xN(n)).attr('rx', 3).attr('fill', col);
+    svg.append('text').attr('class', r.final ? 'lbl' : 'lbl2').attr('x', x0 + xN(n) + 6).attr('y', by + 12).text(r.nse.toFixed(2));
+    const pe = Math.min(100, Math.abs(r.peak));
+    svg.append('rect').attr('x', x1).attr('y', by).attr('height', 16).attr('width', xP(pe)).attr('rx', 3).attr('fill', col);
+    svg.append('text').attr('class', r.final ? 'lbl' : 'lbl2').attr('x', x1 + xP(pe) + 6).attr('y', by + 12).text(`${Math.round(Math.abs(r.peak))}% ${r.peak < 0 ? 'low' : 'high'}`);
+    svg.append('rect').attr('x', 0).attr('y', y).attr('width', W).attr('height', narrow ? rowH + 16 : rowH).attr('fill', 'transparent')
+      .on('mousemove', (ev) => showTip(ev, `<b>${r.label}</b><div class="lbl2" style="margin-bottom:4px">${r.group}</div>${row(col, 'Daily NSE (2020–2025)', r.nse.toFixed(2))}${row(col, 'Flood-peak size error (median)', Math.round(r.peak) + '%')}${row(col, 'Peaks within ±25%', r.within25 + '%')}${row(col, 'Share of sharp rises caught', r.rise + '%')}`))
+      .on('mouseleave', hideTip);
+  });
+}
+function chartMatrix() {
+  const M = D.matrix, el = document.getElementById('c-matrix'), W = el.clientWidth;
+  const lw = Math.min(190, W * 0.36), cw = (W - lw) / M.issues.length, ch = 38, top = 26;
+  el.innerHTML = '';
+  const svg = d3.select(el).append('svg').attr('width', W).attr('height', top + M.rows.length * ch + 4);
+  const color = d3.scaleSequential(d3.interpolate('#fff4ec', '#c4441a')).domain([0, 70]).clamp(true);
+  M.issues.forEach((iss, j) => svg.append('text').attr('class', 'lbl2').attr('x', lw + j * cw + cw / 2).attr('y', 16).attr('text-anchor', 'middle').text(iss));
+  M.rows.forEach((r, i) => {
+    const y = top + i * ch;
+    svg.append('text').attr('class', i === 1 || i === 4 ? 'lbl' : 'lbl2').attr('fill', C.ink).attr('x', lw - 10).attr('y', y + ch / 2 + 4).attr('text-anchor', 'end').text(r.label);
+    r.p80.forEach((v, j) => {
+      const ok = v <= D.GOOD;
+      svg.append('rect').attr('x', lw + j * cw + 1).attr('y', y + 1).attr('width', cw - 2).attr('height', ch - 2).attr('rx', 4).attr('fill', color(v))
+        .on('mousemove', (ev) => showTip(ev, `<b>${r.label}</b><div class="lbl2" style="margin-bottom:4px">forecast made ${M.issues[j]}</div>${row('#fff', 'Typical error', pct(r.med[j]))}${row('#fff', '4 years in 5 within', pct(v))}`))
+        .on('mouseleave', hideTip);
+      svg.append('text').attr('x', lw + j * cw + cw / 2).attr('y', y + ch / 2 + 4).attr('text-anchor', 'middle').attr('pointer-events', 'none')
+        .attr('font-size', cw < 62 ? 11 : 12).attr('font-weight', ok ? 700 : 400).attr('fill', v > 45 ? '#fff' : C.ink)
+        .text((ok && cw >= 62 ? '✓ ' : '') + Math.round(v) + '%');
+    });
+  });
+}
+
 function drawAll() {
   chartForecast(); chartStack(); chartRelations(); chartScatter();
   const R = D.lag_rain, bands = [{ k: 'far', n: 'Far (Ghats)', c: C.blue }, { k: 'mid', n: 'Middle', c: C.orange }, { k: 'near', n: 'Near dam', c: C.green }];
@@ -514,6 +626,7 @@ function drawAll() {
     tip: row('#fff', 'Peak size error', `${r.peak_err}%`) + row('#fff', 'Share of sharp rises caught', `${r.rise}%`) + row('#fff', 'Overall NSE', r.nse) })),
     (v) => `${v}%`, C.blue, 100);
   if (D.vs_krs) chartVsKrs();
+  chartLadder(); chartMatrix();
 }
 segIssue(); segYear(); drawAll();
 let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawAll, 150); });
@@ -578,6 +691,59 @@ def page(d):
     rel2 = (f"Above {es['fill_threshold']} TMC of inflow, {s} ends September ≥90% full in {es['fill_above']} years; below it, {es['fill_below']}"
             if es["fill_threshold"] else f"Inflow vs storage on 30 Sep (r = {es['r_inflow_storage']})")
     rel3 = f"Releases are about {es['release_share']}% of monsoon inflow"
+    L = d["ladder"]
+    fin, clim = next(r for r in L if r["final"]), L[0]
+    ladder_title = (f"From NSE {clim['nse']:.2f} (seasonal average) to {fin['nse']:.2f}: "
+                    + ("upstream releases add the most; the per-cell rain response adds a little more" if d["dam"] == "krs"
+                       else (lambda b, l: f"treating each rain cell separately lifts rain-only accuracy from {b['nse']:.2f} to {fin['nse']:.2f}; "
+                             f"last week's inflow takes it to {l['nse']:.2f}")(next(r for r in L if r["label"] == "Rain in 3 distance bands"), L[-1])))
+    M = d["matrix"]
+    first_ok = lambda r: next((M["issues"][j] for j, v in enumerate(r["p80"]) if v <= GOOD), "never")
+    matrix_title = (f"Without a rain forecast the estimate becomes reliable on {first_ok(M['rows'][1])}; a 30-day rain forecast brings that to "
+                    f"{first_ok(M['rows'][4])}, while knowing only the next 7 days helps less")
+    up = d["dam"] == "krs"
+    node = lambda cls, title, body: f'<div class="node {cls}"><b>{title}</b>{body}</div>'
+    stage = lambda n, title, sub, nodes, two=False, four=False: (f'<div class="stage"><div class="sh"><span>{n}</span>{title}<small>{sub}</small></div>'
+                                                                  f'<div class="nodes{" two" if two else ""}{" four" if four else ""}">{"".join(nodes)}</div></div>')
+    down = '<div class="down"></div>'
+    flow = '<div class="flow">' + down.join([
+        stage(1, "Collect data", "1991–2025, daily", [
+            node("n-data", "Rainfall", f"IMD 0.25° gridded daily rainfall (cells of about 27 × 27 km). {d['cells_total']} cells cover the {'free-draining ' if up else ''}catchment."),
+            node("n-data", "Dam records", "Daily storage, % full, inflow and outflow"
+                 + (" for KRS and the two upstream dams, Harangi and Hemavathy." if up else " for Hemavathy.")),
+            node("n-data", "Maps", f"Catchment boundary ({d['area_km2']:,} km²) and river lines with stream order.")]),
+        stage(2, "Clean and check", f"{len(d['fixes'])} fixes for {s}, all logged", [
+            node("n-prep", "Fix what is clearly wrong",
+                 "<ul><li>Missing days re-added; gaps of up to 3 days filled</li><li>Storage above capacity and one-day spikes removed</li>"
+                 "<li>Zero inflow in the monsoon treated as missing</li><li>Jul–Sep 2019 outflow was not in cusecs: rebuilt as inflow minus storage change</li></ul>"),
+            node("n-prep", "Flag what looks odd",
+                 "<ul><li>Days where storage change does not match inflow minus outflow</li><li>June 2012: very heavy rain but little inflow</li></ul>Flagged only, not changed.")]),
+        stage(3, "Build the inputs", "what the models see each day", four=True, nodes=[
+            node("n-prep", "Catchment rain", "Each cell weighted by its area inside the catchment, and grouped into near, middle and far bands from the dam."),
+            node("n-prep", "Per-cell response", "For every cell: the share of its rain that reaches the dam on each of the next 14 days; wetter soil gives more. "
+                 + ("Rain above Hemavathy dam is left out: it reaches KRS only through Hemavathy's releases. " if up else "")
+                 + "Result: “routed rain”, the inflow expected from rain alone."),
+            node("n-prep", "Soil wetness", "A running total of recent rain that slowly fades, so the same storm counts for more after weeks of rain."),
+            node("n-prep", "Upstream releases" if up else "Time of season",
+                 "Harangi and Hemavathy releases over the last 5 days, and how full they are." if up
+                 else "Day of the year, so the model knows where in the monsoon it is.")]),
+        stage(4, "Two models", "one for days, one for the season", [
+            node("n-model", "A. Daily inflow model",
+                 "<ul><li>Gradient boosting (many small decision trees)</li><li>Predicts each day's inflow from the inputs above</li>"
+                 "<li>Learns from 1991–2019</li><li>Also run 1–7 days ahead, with and without a rain forecast</li></ul>"),
+            node("n-model", "B. Monsoon-total forecast",
+                 "<ul><li>On each forecast date (1 Jun … 15 Sep): total = inflow already measured + predicted rest of season</li>"
+                 "<li>Rest of season from inflow so far, last week's inflow, rain so far, May rain, last 30 days' rain, storage"
+                 + (" and upstream storage" if up else "") + "</li><li>Simple linear (ridge) model, one per forecast date</li>"
+                 "<li>Variant: add the next 7–30 days' actual rain as a perfect rain forecast</li></ul>")], two=True),
+        stage(5, "Test fairly", "never score on data the model learned from", [
+            node("n-model", "Daily model", "Scored only on 2020–2025. NSE: 1 = perfect, 0 = no better than the seasonal average. Flood peaks: size error on the peak day."),
+            node("n-model", "Monsoon total", f"Each of the {len(yrs)} years is forecast by a model trained on the other years. Error = % off that year's actual total.")], two=True),
+        stage(6, "Results", "what an engineer gets", [
+            node("n-out", "Daily inflow and flood warning",
+                 f"NSE {d['daily_nse']:.2f}; high flows flagged {good_days} day{'s' if good_days > 1 else ''} ahead, up to a week with a rain forecast."),
+            node("n-out", "Monsoon total by date", f"Reliable (4 years in 5 within ±{GOOD}%) from {rf}; from {rfr} with a 30-day rain forecast.")], two=True),
+    ]) + "</div>"
     fixes = "".join(f"<tr><td>{f['issue']}</td><td>{f['action']}</td><td class='n'>{f['count']}</td></tr>" for f in d["fixes"])
     a1 = at["1 Aug"]
     body = f"""
@@ -637,22 +803,27 @@ def page(d):
 <div class="row2"><div><div class="chart" id="c-lead1"></div></div><div><div class="chart" id="c-lead2"></div></div></div></div>
 {extra}
 
+<h2 class="sec">Comparing approaches</h2>
+<div class="card"><h2>{ladder_title}</h2>
+<p class="sub">Every way we tried to predict daily inflow, scored on the same unseen years (2020–2025). “Same as yesterday” needs today’s reading, so it only works one day ahead. Hover a row for more scores.</p>
+<div class="chart" id="c-ladder"></div></div>
+<div class="card"><h2>{matrix_title}</h2>
+<p class="sub">Monsoon-total forecast error not exceeded in 4 of 5 years, for each approach (rows) and forecast date (columns). ✓ / bold = within ±{GOOD}%, i.e. reasonably informed. Rain-forecast rows use actual rainfall as a perfect forecast. Hover for the typical error.</p>
+<div class="chart" id="c-matrix"></div></div>
+
+<h2 class="sec">How it works</h2>
+<div class="card"><h2>From raw data to forecast</h2>
+<p class="sub">The same steps run for both dams. Colours: grey = data, blue = preparing inputs, orange = models, green = results.</p>
+{flow}</div>
+
 <details><summary>Data fixes applied to {s} records ({len(d['fixes'])})</summary>
 <table><thead><tr><th>Issue</th><th>Action</th><th class="n">Count</th></tr></thead><tbody>{fixes}</tbody></table></details>
 
-<details><summary>Method and how to reproduce</summary>
-<ul>
-<li><b>Rainfall:</b> IMD 0.25° daily grid, each cell weighted by its area inside the catchment, grouped into near / middle / far bands by distance to the dam.</li>
-<li><b>Monsoon total:</b> forecast = inflow already measured since 1 June + predicted remaining inflow (ridge regression, one model per forecast date) from inflow so far, last week's inflow, rain so far, May rain, rain in the last 30 days and storage{' and upstream storage' if d['dam'] == 'krs' else ''}. Scored leave-one-year-out over 1991–2025 ({len(yrs)} years). Errors are % of each year's actual total.</li>
-<li><b>Rain-forecast test:</b> the actual rain over the next 30 days is added as an input, i.e. a perfect forecast. Real forecasts will do worse.</li>
-<li><b>Per-cell response:</b> a non-negative linear model learns, for every rain cell, how much of its rain reaches the dam on each of the next 14 days (wetter soil gives more). {'Rain above Hemavathy dam is excluded: it reaches KRS only via releases, which are an input. ' if d['dam'] == 'krs' else ''}Its output (“routed rain”) is an input to the daily model.</li>
-<li><b>Daily inflow:</b> gradient boosting on log inflow from routed rain, rain lags, rolling rain totals, soil wetness{', Harangi and Hemavathy releases' if d['dam'] == 'krs' else ''}; trained 1991–2019, tested 2020–2025. NSE: 1 = perfect, 0 = no better than the long-term average.</li>
-<li><b>Dry years:</b> the driest third of years. On 1 Aug the model flags {a1['none_dry']} of them ({a1['f30_dry']} with a 30-day rain forecast).</li>
-</ul>
+<details><summary>How to reproduce</summary>
+<p style="color:var(--ink2)">Python 3.12, packages in requirements.txt. Input data (not in the repository) goes in data/ as described in the README. Then:</p>
 <pre>cd src
-../.venv/bin/python prepare.py && ../.venv/bin/python inflow_model.py
-../.venv/bin/python dam_analysis.py   # needs data/watershed_hemavati.zip, rivers_*.zip
-../.venv/bin/python cell_response.py
+../.venv/bin/python prepare.py && ../.venv/bin/python inflow_model.py && ../.venv/bin/python peak_analysis.py
+../.venv/bin/python dam_analysis.py && ../.venv/bin/python cell_response.py
 ../.venv/bin/python build_dam_reports.py</pre></details>
 <p class="foot">WELL Labs Water Data Hackathon · Theme 2 / Question 3 · generated by src/build_dam_reports.py</p>
 </div>"""

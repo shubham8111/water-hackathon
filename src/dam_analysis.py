@@ -153,7 +153,8 @@ def baselines(q):
     tr, te = yrs <= 2019, (yrs >= 2020) & q.notna() & q.shift(1).notna()
     clim = q[tr].groupby(q.index[tr].dayofyear).mean().rolling(15, center=True, min_periods=1).mean()
     c = pd.Series(q.index.dayofyear.map(clim).values, index=q.index)
-    return {"Climatology": metrics(q[te], c[te]), "Persistence (yesterday)": metrics(q[te], q.shift(1)[te])}
+    return {"Climatology": (metrics(q[te], c[te]), c[te]),
+            "Persistence (yesterday)": (metrics(q[te], q.shift(1)[te]), q.shift(1)[te])}
 
 
 def peaks(q, p):
@@ -375,10 +376,13 @@ def main():
                       ("krs|Rain + upstream + past inflow", Xk_full.join(ar_feats(q_k)), q_k)]:
         daily[key], preds[key] = run_daily(X, q)
         print(key, daily[key]["all"], "| monsoon NSE", daily[key]["monsoon"]["NSE"])
+    base_preds = {}
     for dam, q in [("hemavathy", q_h), ("krs", q_k)]:
-        for k, v in baselines(q).items():
+        for k, (v, p) in baselines(q).items():
             daily[f"{dam}|{k}"] = {"all": v}
+            base_preds[f"{dam}|{k}"] = p
     R["daily"] = daily
+    R["baseline_peaks"] = {k: peaks(q_h if k.startswith("hem") else q_k, p) for k, p in base_preds.items()}
     hyd = {}
     for dam, q, keys in [("hemavathy", q_h, ["hemavathy|Rain only", "hemavathy|Rain + past inflow"]),
                          ("krs", q_k, ["krs|Rain + upstream releases", "krs|Rain + upstream + past inflow"])]:
