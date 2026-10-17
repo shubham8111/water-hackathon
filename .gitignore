@@ -1,0 +1,10 @@
+# Allowlist: only the analysis scripts, report build files and the final report are tracked.
+# Data, hackathon material, credentials and environments stay out.
+/*
+!/.gitignore
+!/requirements.txt
+!/src/
+!/outputs/
+/outputs/*
+!/outputs/KRS_inflow_report.html
+/src/__pycache__/
