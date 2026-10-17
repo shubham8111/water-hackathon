@@ -122,6 +122,41 @@ function chartFan(id, dam, year, h = 320) {
       + row(C.ink, 'Actual', F.actual + ' TMC'); });
 }
 
+/* every year at once: forecast, 80% range and actual, for one forecast date */
+let allIssue = '15 Aug';
+function chartAllYears(id, dam, h = 230) {
+  const F = D.dams[dam].fans, yrs = Object.keys(F), el = document.getElementById(id), m = { t: 24, r: 12, b: 26, l: 44 }, f = frame(el, h, m);
+  const k = F[yrs[0]].issues.findIndex((p) => p.issue === allIssue), col = DC[dam];
+  const P = yrs.map((y) => ({ y, a: F[y].actual, ...F[y].issues[k] }));
+  const x = d3.scaleBand().domain(yrs).range([0, f.iw]).padding(0.25);
+  const y = d3.scaleLinear().domain([0, d3.max(P, (p) => Math.max(p.hi, p.a)) * 1.05]).nice().range([f.ih, 0]);
+  yAxis(f, y, (v) => v, 4); yTitle(f, 'June–September inflow, TMC');
+  f.g.append('g').attr('class', 'axis').attr('transform', `translate(0,${f.ih})`).call(d3.axisBottom(x).tickSizeOuter(0)
+    .tickValues(yrs.filter((v) => +v % 5 === 0)));
+  const bw = Math.max(3, Math.min(10, x.bandwidth() * 0.55)), cx = (p) => x(p.y) + x.bandwidth() / 2;
+  const inside = (p) => p.a >= p.lo && p.a <= p.hi;
+  f.g.selectAll(null).data(P).join('rect').attr('x', (p) => cx(p) - bw / 2).attr('width', bw).attr('y', (p) => y(p.hi)).attr('height', (p) => y(p.lo) - y(p.hi))
+    .attr('rx', bw / 2).attr('fill', col).attr('opacity', 0.3);
+  f.g.selectAll(null).data(P).join('circle').attr('cx', cx).attr('cy', (p) => y(p.esp)).attr('r', Math.min(4.5, bw / 2 + 1)).attr('fill', col);
+  f.g.selectAll(null).data(P).join('line').attr('x1', (p) => cx(p) - bw).attr('x2', (p) => cx(p) + bw).attr('y1', (p) => y(p.a)).attr('y2', (p) => y(p.a))
+    .attr('stroke', (p) => inside(p) ? C.ink : C.orange).attr('stroke-width', 2.5);
+  f.g.selectAll(null).data(P).join('rect').attr('x', (p) => x(p.y)).attr('width', x.bandwidth()).attr('y', 0).attr('height', f.ih).attr('fill', 'transparent')
+    .on('mousemove', (ev, p) => showTip(ev, `<b>${p.y} · forecast made ${allIssue}</b>` + row(col, 'Forecast', `${p.esp} TMC (${p.esp > p.a ? '+' : ''}${Math.round((p.esp - p.a) / p.a * 100)}%)`)
+      + row(col, 'Likely range (80%)', `${Math.round(p.lo)}–${Math.round(p.hi)} TMC`) + row(inside(p) ? C.ink : C.orange, 'Actual', `${p.a} TMC`)
+      + row(C.ink3, 'Chance of a dry season', Math.round(p.p_dry * 100) + '%'))).on('mouseleave', hideTip);
+  const n = P.filter(inside).length;
+  const e = P.map((p) => Math.abs(p.esp - p.a) / p.a * 100).sort((a, b) => a - b);
+  return { n, total: P.length, med: e[Math.floor(e.length / 2)] };
+}
+function drawAllYears(prefix, h) {
+  const out = ['krs', 'hemavathy'].map((dam) => [dam, chartAllYears(`${prefix}-${dam}`, dam, h)]);
+  out.forEach(([dam, r]) => { const el = document.getElementById(`${prefix}-${dam}-t`);
+    if (el) el.innerHTML = `${D.dams[dam].short}: actual inside the likely range in <b>${r.n} of ${r.total}</b> years · typical error ±${Math.round(r.med)}%`; });
+}
+function setupAllYears(prefix, h) {
+  segButtons(`${prefix}-iss`, ['1 Jul', '1 Aug', '15 Aug', '1 Sep'].map((v) => [v, 'Forecast made ' + v]), allIssue, (v) => { allIssue = v; drawAllYears(prefix, typeof h === 'function' ? h() : h); });
+}
+
 /* dry-season warning by date, both dams */
 function chartDry(id, h = 260) {
   const el = document.getElementById(id), m = { t: 26, r: 16, b: 32, l: 40 }, f = frame(el, h, m);
@@ -250,7 +285,9 @@ FINAL_CSS = """
 .links a { color:var(--blue); }
 .err { color:var(--ink3); font-weight:400; } .nse { color:var(--ink); font-weight:700; }
 .tile .v .err { font-size:.6em; }
-.nset { font-size:.85rem; } .nset th, .nset td { white-space:nowrap; }
+.nset { font-size:.85rem; }
+.slide .seg { align-self:flex-start; }
+h3.yrh { font-size:.92rem; font-weight:500; color:var(--ink2); margin:10px 0 0; } h3.yrh b { color:var(--ink); } .nset th, .nset td { white-space:nowrap; }
 """
 
 
@@ -320,10 +357,12 @@ def final_page(D):
 <div class="mini"><h3>Hemavathy: the same</h3><div class="chart" id="f-stor-h"></div></div></div>
 <div class="legend"><span><i class="dot" style="background:#eb6834"></i>Driest third of years</span><span><i class="dot" style="background:#2a78d6"></i>KRS, other years</span><span><i class="dot" style="background:#1baf7a"></i>Hemavathy, other years</span></div></div>
 
-<div class="card"><h2>The forecast through one season: every past monsoon's remaining rain replayed on this year's catchment</h2>
-<p class="sub">On each forecast date the inflow already measured and today's state are fixed, and the rest of the season is replayed with the rain of each of the other {len(k['fans']) - 1} years. Line = middle of the replays; band = 80% likely range; dashed = what actually came. Pick a dam and a year; hover for the chance of a dry season.</p>
-<div class="seg" id="ffan-dam"></div> <select class="yr" id="ffan-year" aria-label="Year"></select>
-<div class="chart" id="ffan-chart"></div></div>
+<div class="card"><h2>Every year at once: the forecast, its likely range, and what actually came</h2>
+<p class="sub">On the forecast date the inflow already measured and today's state are fixed, and the rest of the season is replayed with the rain of each of the other {len(k['fans']) - 1} years. Dot = middle of the replays; bar = 80% likely range; tick = actual total. Each year is forecast by a model that never saw it. Pick the forecast date; hover a year for details.</p>
+<div class="seg" id="fall-iss"></div>
+<div class="legend"><span><i class="area" style="background:rgba(42,120,214,.3)"></i>80% likely range</span><span><i class="dot" style="background:#2a78d6"></i>Forecast (KRS)</span><span><i class="dot" style="background:#1baf7a"></i>Forecast (Hemavathy)</span><span><i style="background:#15202b;height:3px"></i>Actual, inside the range</span><span><i style="background:#eb6834;height:3px"></i>Actual, outside</span></div>
+<h3 class="yrh" id="fall-krs-t"></h3><div class="chart" id="fall-krs"></div>
+<h3 class="yrh" id="fall-hemavathy-t"></h3><div class="chart" id="fall-hemavathy"></div></div>
 
 <h2 class="sec">Question 2 · How early can engineers make a reasonably informed estimate?</h2>
 <div class="card"><span class="q">ANSWER</span>
@@ -361,7 +400,7 @@ def final_page(D):
     script = r"""
 function drawAll() {
   chartStorage('f-stor-k', 'krs'); chartStorage('f-stor-h', 'hemavathy');
-  chartFan('ffan-chart', fanState.dam, fanState.year);
+  drawAllYears('fall', 220);
   const S = chartTimeline('f-tl-k', 'krs'); chartTimeline('f-tl-h', 'hemavathy');
   legend(document.getElementById('f-tl-leg'), [{ n: 'Assume an average year', c: C.ink3, cls: 'dash' }, { n: 'Our forecast, KRS', c: DC.krs }, { n: 'Our forecast, Hemavathy', c: DC.hemavathy }, { n: '+ 30-day rain forecast', c: C.orange }, { n: `±${D.GOOD}% band`, c: 'rgba(29,122,67,.25)', cls: 'area' }]);
   legend(document.getElementById('f-dry-leg'), chartDry('f-dry'));
@@ -369,7 +408,7 @@ function drawAll() {
   chartLadderMini('f-lad-k', 'krs'); chartLadderMini('f-lad-h', 'hemavathy');
   legend(document.getElementById('f-pap-leg'), chartPaper('f-pap'));
 }
-setupFan('ffan'); drawAll();
+setupAllYears('fall', 220); drawAll();
 let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawAll, 150); });
 """
     return doc("Monsoon Inflow Outlook", CSS + FINAL_CSS, body, D, script)
@@ -429,9 +468,12 @@ def presentation(D):
         ("stor", f"""<div class="kicker">Question 1 · How much water?</div><h2>Monsoon inflow decides how full the dams end September</h2>
 <p class="lede">Above {st['fill_threshold']} TMC of June–September inflow, KRS ends September at least 90% full in {st['fill_above']} years; below it, in {st['fill_below']}. Orange = driest third of years.</p>
 <div class="body"><div class="row2c"><div class="mini"><h3>KRS</h3><div class="chart" id="p-stor-k"></div></div><div class="mini"><h3>Hemavathy</h3><div class="chart" id="p-stor-h"></div></div></div></div>"""),
-        ("fan", f"""<div class="kicker">Question 1 · How much water?</div><h2>Replaying every past monsoon gives a forecast and a likely range</h2>
-<p class="lede">On each date the inflow so far is fixed and the rest of the season is replayed with every other year's rain. Band = 80% likely range; dashed = what actually came.</p>
-<div><div class="seg" id="pfan-dam"></div> <select class="yr" id="pfan-year" aria-label="Year"></select></div><div class="body"><div class="chart" id="pfan-chart"></div></div>"""),
+        ("fan", f"""<div class="kicker">Question 1 · How much water?</div><h2>Forecast vs actual for all {len(k['fans'])} years, with a likely range</h2>
+<p class="lede">Rest of season replayed with every other year's rain. Dot = forecast, bar = 80% likely range, tick = what actually came (orange if outside the range).</p>
+<div class="body"><div class="seg" id="pall-iss"></div>
+<div class="legend"><span><i class="area" style="background:rgba(42,120,214,.3)"></i>80% likely range</span><span><i class="dot" style="background:#2a78d6"></i>Forecast (KRS)</span><span><i class="dot" style="background:#1baf7a"></i>Forecast (Hemavathy)</span><span><i style="background:#15202b;height:3px"></i>Actual, inside the range</span><span><i style="background:#eb6834;height:3px"></i>Actual, outside</span></div>
+<h3 class="yrh" id="pall-krs-t"></h3><div class="chart" id="pall-krs"></div>
+<h3 class="yrh" id="pall-hemavathy-t"></h3><div class="chart" id="pall-hemavathy"></div></div>"""),
         ("tl", f"""<div class="kicker">Question 2 · How early?</div><h2>Reasonably informed from {k['reliable']}; from {k['reliable_rain']} with a 30-day rain forecast</h2>
 <p class="lede">Error not exceeded in 4 years out of 5, by the date the forecast is made. Filled dots = within ±{GOOD}%. On {k['reliable']}: {nse_pair(at(k, k['reliable'])['esp_nse'], at(h, h['reliable'])['esp_nse'])} (KRS · Hemavathy); about 0 before July.</p>
 <div class="legend" id="p-tl-leg"></div><div class="body"><div class="row2c"><div class="mini"><h3>KRS</h3><div class="chart" id="p-tl-k"></div></div><div class="mini"><h3>Hemavathy</h3><div class="chart" id="p-tl-h"></div></div></div></div>"""),
@@ -462,7 +504,7 @@ const slides = [...document.querySelectorAll('.slide')]; let cur = 0;
 const H = () => Math.max(220, Math.min(460, window.innerHeight * 0.5));
 const draw = {
   stor: () => { chartStorage('p-stor-k', 'krs', H()); chartStorage('p-stor-h', 'hemavathy', H()); },
-  fan: () => chartFan('pfan-chart', fanState.dam, fanState.year, H()),
+  fan: () => drawAllYears('pall', H() * 0.5),
   tl: () => { chartTimeline('p-tl-k', 'krs', H()); chartTimeline('p-tl-h', 'hemavathy', H());
     legend(document.getElementById('p-tl-leg'), [{ n: 'Assume an average year', c: C.ink3, cls: 'dash' }, { n: 'Our forecast, KRS', c: DC.krs }, { n: 'Our forecast, Hemavathy', c: DC.hemavathy }, { n: '+ 30-day rain forecast', c: C.orange }]); },
   dry: () => legend(document.getElementById('p-dry-leg'), chartDry('p-dry', H())),
@@ -481,8 +523,7 @@ function show(i) {
 document.addEventListener('keydown', (e) => { if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); show(cur + 1); }
   if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); show(cur - 1); } });
 document.getElementById('next').onclick = () => show(cur + 1); document.getElementById('prev').onclick = () => show(cur - 1);
-setupFan('pfan');
-const _cf = chartFan; chartFan = (id, dam, y) => _cf(id, dam, y, H());
+setupAllYears('pall', () => H() * 0.5);
 show((parseInt(location.hash.slice(1)) || 1) - 1);
 let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => show(cur), 150); });
 """
