@@ -22,7 +22,7 @@ import pandas as pd
 from shapely.geometry import box
 from sklearn.linear_model import Ridge
 
-from dam_analysis import (KRS_DAM, ar_feats, band_rain, cells_for, features, hemavathy_outlet,
+from dam_analysis import (KRS_DAM, TEST_END, ar_feats, band_rain, cells_for, features, hemavathy_outlet,
                                km, metrics, peaks, run_daily)
 from inflow_model import api
 
@@ -100,7 +100,7 @@ def cell_model(dam, df, cells, q, upstream):
     alpha = max(scores, key=scores.get)
     model = fit(X, q, mon & (yrs <= 2019), alpha)
     coef = pd.Series(model.coef_, index=X.columns)
-    lin_test = nse_on(model, X, q, mon & (yrs >= 2020))
+    lin_test = nse_on(model, X, q, mon & (yrs >= 2020) & (yrs <= TEST_END))
     print(dam, "alpha", alpha, {k: round(v, 3) for k, v in scores.items()}, "linear test NSE (Jun-Nov)", lin_test)
 
     wet_typ = float(0.25 + wet[mon].median())

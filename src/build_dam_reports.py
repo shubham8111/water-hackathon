@@ -83,26 +83,28 @@ def ladder(dam, R, cc):
         items = [("Simple baselines", "Average for the day of year", fromd("krs|Climatology")),
                  ("Simple baselines", "Same as yesterday", fromd("krs|Persistence (yesterday)")),
                  ("Rain only", "Rain grouped in 3 distance bands", fromr("krs (rain only)|Straight-line bands")),
-                 ("Rain only", "Rain with per-cell response", fromd("krs|Rain only")),
+                 ("Rain only", "Rain with per-cell response + soil moisture", fromd("krs|Rain only")),
                  ("Rain + upstream releases", "Rain in 3 distance bands", fromc("Current: distance bands")),
                  ("Rain + upstream releases", "Bands by distance along the river", fromr("krs|River-distance bands")),
                  ("Rain + upstream releases", "Raw rain of every cell", fromc("+ raw rain of every cell (lags 0-5)")),
-                 ("Rain + upstream releases", "Per-cell response (used in this report)", fromc("+ per-cell routed rain")),
-                 ("Adding last week's inflow", "Per-cell response + last week's inflow", fromd("krs|Rain + upstream + past inflow"))]
+                 ("Rain + upstream releases", "Per-cell response", fromc("+ per-cell routed rain")),
+                 ("Rain + upstream releases", "Per-cell response + soil moisture (used in this report)", fromd("krs|Rain + upstream releases")),
+                 ("Adding last week's inflow", "Final model + last week's inflow", fromd("krs|Rain + upstream + past inflow"))]
     else:
         items = [("Simple baselines", "Average for the day of year", fromd("hemavathy|Climatology")),
                  ("Simple baselines", "Same as yesterday", fromd("hemavathy|Persistence (yesterday)")),
                  ("Rain", "Rain in 3 distance bands", fromc("Current: distance bands")),
                  ("Rain", "Bands by distance along the river", fromr("hemavathy|River-distance bands")),
                  ("Rain", "Raw rain of every cell", fromc("+ raw rain of every cell (lags 0-5)")),
-                 ("Rain", "Per-cell response (used in this report)", fromd("hemavathy|Rain only")),
-                 ("Adding last week's inflow", "Per-cell response + last week's inflow", fromd("hemavathy|Rain + past inflow"))]
+                 ("Rain", "Per-cell response", fromc("+ per-cell routed rain")),
+                 ("Rain", "Per-cell response + soil moisture (used in this report)", fromd("hemavathy|Rain only")),
+                 ("Adding last week's inflow", "Final model + last week's inflow", fromd("hemavathy|Rain + past inflow"))]
     return [{"group": g, "label": lab, "nse": round(float(n), 3), "peak": p["peak_median_err_pct"],
              "within25": round(p["peak_within_25pct"] * 100), "rise": round(p["rise_capture_median"] * 100),
              "final": "used in this report" in lab} for g, lab, (n, p) in items]
 
 
-def dam_data(dam, R, inflow, fixes, CR, df):
+def dam_data(dam, R, inflow, fixes, CR, df, SOIL):
     mi = R["monsoon_inflow"][dam]
     fc = []
     for r in mi["by_issue"]:
@@ -126,6 +128,15 @@ def dam_data(dam, R, inflow, fixes, CR, df):
          "fixes": [f for f in fixes if f["dataset"] == dam]}
     d["at"] = {f["issue"]: f for f in fc}
     d["ladder"] = ladder(dam, R, CR[dam]["daily_comparison"])
+    so = SOIL[dam]
+    d["soil"] = {"without": so["daily"]["Without soil data"], "with": so["daily"]["With soil data"],
+                 "sub_watersheds": so["sub_watersheds"], "months": so["months"],
+                 "corr": so["checks"]["soil_vs_wetness_index_corr"], "corr_anom": so["checks"]["soil_vs_wetness_index_corr_anomaly"],
+                 "monsoon": [{"issue": issue_label(a["issue"]), "without": a["p80"], "with": b["p80"]}
+                             for a, b in zip(so["monsoon_total"]["Without soil data"], so["monsoon_total"]["With soil data"])]}
+    other = "hemavathy" if dam == "krs" else "krs"
+    d["soil_other"] = {"name": DAMS[other]["short"], "without": SOIL[other]["daily"]["Without soil data"]["NSE"],
+                       "with": SOIL[other]["daily"]["With soil data"]["NSE"]}
     order = [("Assume an average year", None), ("Model, no rain forecast", NONE), ("+ next 7 days of rain", "+ next 7 days of rain"),
              ("+ next 15 days of rain", "+ next 15 days"), ("+ next 30 days of rain", F30), ("+ all rain up to 30 Sep", "+ rest of season (to 30 Sep)")]
     d["matrix"] = {"issues": [issue_label(r["issue_date"]) for r in mi["by_issue"]],
@@ -582,7 +593,7 @@ function chartLadder() {
     svg.append('rect').attr('x', x1).attr('y', by).attr('height', 16).attr('width', xP(pe)).attr('rx', 3).attr('fill', col);
     svg.append('text').attr('class', r.final ? 'lbl' : 'lbl2').attr('x', x1 + xP(pe) + 6).attr('y', by + 12).text(`${Math.round(Math.abs(r.peak))}% ${r.peak < 0 ? 'low' : 'high'}`);
     svg.append('rect').attr('x', 0).attr('y', y).attr('width', W).attr('height', narrow ? rowH + 16 : rowH).attr('fill', 'transparent')
-      .on('mousemove', (ev) => showTip(ev, `<b>${r.label}</b><div class="lbl2" style="margin-bottom:4px">${r.group}</div>${row(col, 'Daily NSE (2020–2025)', r.nse.toFixed(2))}${row(col, 'Flood-peak size error (median)', Math.round(r.peak) + '%')}${row(col, 'Peaks within ±25%', r.within25 + '%')}${row(col, 'Share of sharp rises caught', r.rise + '%')}`))
+      .on('mousemove', (ev) => showTip(ev, `<b>${r.label}</b><div class="lbl2" style="margin-bottom:4px">${r.group}</div>${row(col, 'Daily NSE (2020–2023)', r.nse.toFixed(2))}${row(col, 'Flood-peak size error (median)', Math.round(r.peak) + '%')}${row(col, 'Peaks within ±25%', r.within25 + '%')}${row(col, 'Share of sharp rises caught', r.rise + '%')}`))
       .on('mouseleave', hideTip);
   });
 }
@@ -608,6 +619,26 @@ function chartMatrix() {
   });
 }
 
+function chartSoil() {
+  const S = D.soil, el = document.getElementById('c-soil');
+  const yrs = Object.keys(S.without.nse_by_year), m = { t: 28, r: 16, b: 30, l: 44 }, f = frame(el, 260, m);
+  const x0 = d3.scaleBand().domain(yrs.concat(['All years'])).range([0, f.iw]).padding(0.25);
+  const x1 = d3.scaleBand().domain(['without', 'with']).range([0, x0.bandwidth()]).padding(0.12);
+  const val = (k, y) => y === 'All years' ? S[k].NSE : S[k].nse_by_year[y];
+  const y = d3.scaleLinear().domain([0, 1]).range([f.ih, 0]);
+  yAxis(f, y, (v) => v.toFixed(1), 5); yTitle(f, 'Daily NSE (1 = perfect)');
+  f.g.append('g').attr('class', 'axis').attr('transform', `translate(0,${f.ih})`).call(d3.axisBottom(x0).tickSizeOuter(0));
+  const col = { without: '#9aa6b2', with: C.blue };
+  x0.domain().forEach((yr) => ['without', 'with'].forEach((k) => {
+    const v = val(k, yr), bx = x0(yr) + x1(k), h = f.ih - y(Math.max(0, v));
+    f.g.append('rect').attr('x', bx).attr('width', x1.bandwidth()).attr('y', y(Math.max(0, v))).attr('height', h).attr('rx', 3).attr('fill', col[k])
+      .on('mousemove', (ev) => showTip(ev, `<b>${yr}</b>${row(col.without, 'Without soil data', val('without', yr).toFixed(2))}${row(col.with, 'With soil data', val('with', yr).toFixed(2))}`))
+      .on('mouseleave', hideTip);
+    f.g.append('text').attr('class', k === 'with' ? 'lbl' : 'lbl2').attr('x', bx + x1.bandwidth() / 2).attr('y', y(Math.max(0, v)) - 5).attr('text-anchor', 'middle').text(v.toFixed(2));
+  }));
+  legend(document.getElementById('l-soil'), [{ n: 'Without soil data', c: col.without, cls: 'area' }, { n: 'With soil data', c: col.with, cls: 'area' }]);
+}
+
 function drawAll() {
   chartForecast(); chartStack(); chartRelations(); chartScatter();
   const R = D.lag_rain, bands = [{ k: 'far', n: 'Far (Ghats)', c: C.blue }, { k: 'mid', n: 'Middle', c: C.orange }, { k: 'near', n: 'Near dam', c: C.green }];
@@ -626,7 +657,7 @@ function drawAll() {
     tip: row('#fff', 'Peak size error', `${r.peak_err}%`) + row('#fff', 'Share of sharp rises caught', `${r.rise}%`) + row('#fff', 'Overall NSE', r.nse) })),
     (v) => `${v}%`, C.blue, 100);
   if (D.vs_krs) chartVsKrs();
-  chartLadder(); chartMatrix();
+  chartLadder(); chartMatrix(); chartSoil();
 }
 segIssue(); segYear(); drawAll();
 let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawAll, 150); });
@@ -657,15 +688,19 @@ def page(d):
         rv = d["river"]
         best = max(rv[1:], key=lambda r: r["rise"])
         same_peak = abs(best["peak_err"] - rv[0]["peak_err"]) < 3
-        river_title = (f"Using the river network catches more of each sharp rise ({rv[0]['rise']}% → {best['rise']}%)"
-                       + ("; flood-peak size and overall fit barely change" if same_peak else
-                          f"; flood-peak size error {rv[0]['peak_err']:.0f}% → {best['peak_err']:.0f}%"))
+        if best["rise"] > rv[0]["rise"] + 2:
+            river_title = (f"Using the river network catches more of each sharp rise ({rv[0]['rise']}% → {best['rise']}%)"
+                           + ("; flood-peak size and overall fit barely change" if same_peak else
+                              f"; flood-peak size error {rv[0]['peak_err']:.0f}% → {best['peak_err']:.0f}%"))
+        else:
+            river_title = (f"Grouping rain by river distance does not beat straight-line distance on 2020–2023 "
+                           f"(sharp rises caught: {rv[0]['rise']}% vs at best {best['rise']}%)")
         extra = f"""
 <div class="card"><h2>Upstream releases and soil wetness drive KRS inflow, not today's rain</h2>
 <p class="sub">How much the daily model's accuracy drops when each input is scrambled. Bigger bar = more important.</p>
 <div class="chart" id="c-imp"></div></div>
 <div class="card"><h2>{river_title}</h2>
-<p class="sub">Share of each sharp rise in inflow (5,000+ cusecs in a day) that the daily model predicts on the day, 2020–2025, for different ways of using the river network. Hover a bar for flood-peak size error and overall fit (NSE).</p>
+<p class="sub">Share of each sharp rise in inflow (5,000+ cusecs in a day) that the daily model predicts on the day, 2020–2023, for different ways of using the river network. Hover a bar for flood-peak size error and overall fit (NSE).</p>
 <div class="chart" id="c-river"></div></div>"""
         lag_html = """<div class="row2"><div><h3>Rain on the free-draining catchment</h3><div class="legend" id="l-lag"></div><div class="chart" id="c-lag"></div></div>
 <div><h3>Releases from upstream dams</h3><div class="legend" id="l-lagup"></div><div class="chart" id="c-lagup"></div></div></div>"""
@@ -682,7 +717,7 @@ def page(d):
     b, a = d["cell_cmp"]["before"], d["cell_cmp"]["after"]
     cmp_tiles = "".join(f'<div class="tile"><div class="k">{k}</div><div class="v">{v}</div><div class="s">{t}</div></div>' for k, v, t in [
         ("Daily accuracy (NSE)", f"{b['NSE']:.2f} → {a['NSE']:.2f}", "using per-cell routing instead of 3 distance bands"),
-        ("Flood-peak size error", f"{b['peak_median_err_pct']:.0f}% → {a['peak_median_err_pct']:.0f}%", "median, same-day, 2020–2025"),
+        ("Flood-peak size error", f"{b['peak_median_err_pct']:.0f}% → {a['peak_median_err_pct']:.0f}%", "median, same-day, 2020–2023"),
         ("Sharp rises caught", f"{round(b['rise_capture_median'] * 100)}% → {round(a['rise_capture_median'] * 100)}%", "share of each 5,000+ cusec jump predicted")])
     es, mean = d["eda_stats"], d["eda_stats"]["mean"]
     eda_title = (f"Dry years ripple through: {abs(es['dry_rain_pct'])}% less rain brings {abs(es['dry_inflow_pct'])}% less inflow, "
@@ -691,11 +726,31 @@ def page(d):
     rel2 = (f"Above {es['fill_threshold']} TMC of inflow, {s} ends September ≥90% full in {es['fill_above']} years; below it, {es['fill_below']}"
             if es["fill_threshold"] else f"Inflow vs storage on 30 Sep (r = {es['r_inflow_storage']})")
     rel3 = f"Releases are about {es['release_share']}% of monsoon inflow"
+    so, oth = d["soil"], d["soil_other"]
+    gain = so["with"]["NSE"] - so["without"]["NSE"]
+    soil_title = (f"Soil moisture data improves the daily forecast: NSE {so['without']['NSE']:.2f} → {so['with']['NSE']:.2f}"
+                  + (", more than at KRS" if d["dam"] == "hemavathy" else ", less than at Hemavathy"))
+    soil_why = ("<b>Hemavathy gains more because its inflow comes straight from rain on its own catchment</b>, so how wet the soil is "
+                f"directly decides how much rain runs off (KRS gains only {oth['without']:.2f} → {oth['with']:.2f})."
+                if d["dam"] == "hemavathy" else
+                "<b>KRS gains less because it already gets most of its information from the upstream releases</b> (Harangi and Hemavathy), "
+                f"which already reflect how wet their catchments are (Hemavathy gains {oth['without']:.2f} → {oth['with']:.2f}).")
+    improved = sum(so["with"]["nse_by_year"][y] > so["without"]["nse_by_year"][y] + 0.005 for y in so["with"]["nse_by_year"])
+    soil_tiles = "".join(f'<div class="tile"><div class="k">{k}</div><div class="v">{v}</div><div class="s">{t}</div></div>' for k, v, t in [
+        ("Daily accuracy (NSE)", f"{so['without']['NSE']:.2f} → {so['with']['NSE']:.2f}", f"better in {improved} of {len(so['with']['nse_by_year'])} test years"),
+        ("Monsoon months only", f"{so['without']['monsoon_NSE']:.2f} → {so['with']['monsoon_NSE']:.2f}", "NSE, June–September"),
+        ("Flood peaks within ±25%", f"{round(so['without']['peak_within_25pct'] * 100)}% → {round(so['with']['peak_within_25pct'] * 100)}%", "same-day peak size")])
+    mdiff = [b["with"] - b["without"] for b in so["monsoon"]]
+    soil_note = (f"<b>The monsoon-total forecast does not improve:</b> with soil data its error moves by {min(mdiff):+.0f} to {max(mdiff):+.0f} points "
+                 f"depending on the date, which is noise for 33 years, so the monsoon-total forecast stays without it. "
+                 f"<b>Caveats:</b> this soil data is published with a long delay, so in real use a near-real-time soil-moisture product is needed; "
+                 f"it ends in 2023, which is why daily scores in this report use 2020–2023. It overlaps our rain-based soil-wetness index "
+                 f"(correlation {so['corr']}) but its month-to-month departures differ (correlation {so['corr_anom']}), which is where the extra information comes from.")
     L = d["ladder"]
     fin, clim = next(r for r in L if r["final"]), L[0]
     ladder_title = (f"From NSE {clim['nse']:.2f} (seasonal average) to {fin['nse']:.2f}: "
-                    + ("upstream releases add the most; the per-cell rain response adds a little more" if d["dam"] == "krs"
-                       else (lambda b, l: f"treating each rain cell separately lifts rain-only accuracy from {b['nse']:.2f} to {fin['nse']:.2f}; "
+                    + ("upstream releases add the most; per-cell rain response and soil moisture add a little more" if d["dam"] == "krs"
+                       else (lambda b, l: f"per-cell rain response and soil moisture lift rain-only accuracy from {b['nse']:.2f} to {fin['nse']:.2f}; "
                              f"last week's inflow takes it to {l['nse']:.2f}")(next(r for r in L if r["label"] == "Rain in 3 distance bands"), L[-1])))
     M = d["matrix"]
     first_ok = lambda r: next((M["issues"][j] for j, v in enumerate(r["p80"]) if v <= GOOD), "never")
@@ -707,11 +762,12 @@ def page(d):
                                                                   f'<div class="nodes{" two" if two else ""}{" four" if four else ""}">{"".join(nodes)}</div></div>')
     down = '<div class="down"></div>'
     flow = '<div class="flow">' + down.join([
-        stage(1, "Collect data", "1991–2025, daily", [
+        stage(1, "Collect data", "1991–2025, daily", four=True, nodes=[
             node("n-data", "Rainfall", f"IMD 0.25° gridded daily rainfall (cells of about 27 × 27 km). {d['cells_total']} cells cover the {'free-draining ' if up else ''}catchment."),
             node("n-data", "Dam records", "Daily storage, % full, inflow and outflow"
                  + (" for KRS and the two upstream dams, Harangi and Hemavathy." if up else " for Hemavathy.")),
-            node("n-data", "Maps", f"Catchment boundary ({d['area_km2']:,} km²) and river lines with stream order.")]),
+            node("n-data", "Maps", f"Catchment boundary ({d['area_km2']:,} km²) and river lines with stream order."),
+            node("n-data", "Soil moisture", f"TerraClimate monthly soil moisture, water deficit and evaporation for {len(d['soil']['sub_watersheds'])} sub-watersheds, 1991–2023.")]),
         stage(2, "Clean and check", f"{len(d['fixes'])} fixes for {s}, all logged", [
             node("n-prep", "Fix what is clearly wrong",
                  "<ul><li>Missing days re-added; gaps of up to 3 days filled</li><li>Storage above capacity and one-day spikes removed</li>"
@@ -723,7 +779,7 @@ def page(d):
             node("n-prep", "Per-cell response", "For every cell: the share of its rain that reaches the dam on each of the next 14 days; wetter soil gives more. "
                  + ("Rain above Hemavathy dam is left out: it reaches KRS only through Hemavathy's releases. " if up else "")
                  + "Result: “routed rain”, the inflow expected from rain alone."),
-            node("n-prep", "Soil wetness", "A running total of recent rain that slowly fades, so the same storm counts for more after weeks of rain."),
+            node("n-prep", "Soil wetness", "A running total of recent rain that slowly fades, plus last month's measured soil moisture and how far it is from normal."),
             node("n-prep", "Upstream releases" if up else "Time of season",
                  "Harangi and Hemavathy releases over the last 5 days, and how full they are." if up
                  else "Day of the year, so the model knows where in the monsoon it is.")]),
@@ -737,7 +793,7 @@ def page(d):
                  + (" and upstream storage" if up else "") + "</li><li>Simple linear (ridge) model, one per forecast date</li>"
                  "<li>Variant: add the next 7–30 days' actual rain as a perfect rain forecast</li></ul>")], two=True),
         stage(5, "Test fairly", "never score on data the model learned from", [
-            node("n-model", "Daily model", "Scored only on 2020–2025. NSE: 1 = perfect, 0 = no better than the seasonal average. Flood peaks: size error on the peak day."),
+            node("n-model", "Daily model", "Learns from 1991–2019, scored only on 2020–2023 (soil data ends 2023). NSE: 1 = perfect, 0 = no better than the seasonal average. Flood peaks: size error on the peak day."),
             node("n-model", "Monsoon total", f"Each of the {len(yrs)} years is forecast by a model trained on the other years. Error = % off that year's actual total.")], two=True),
         stage(6, "Results", "what an engineer gets", [
             node("n-out", "Daily inflow and flood warning",
@@ -792,20 +848,26 @@ def page(d):
 <div class="tiles" style="margin-top:14px">{cmp_tiles}</div></div>
 
 <div class="card"><h2>Daily inflow is tracked closely (NSE {d['daily_nse']:.2f}); flood peaks come out {abs(d['peaks']['peak_median_err_pct']):.0f}% low</h2>
-<p class="sub">June–October of the test years 2020–2025, which the model never saw. Pick a year.</p>
+<p class="sub">June–October of the test years 2020–2023, which the model never saw. Pick a year. <b>NSE</b> = how much of the day-to-day rise and fall the model gets right: 1 = perfect, 0 = no better than always guessing the seasonal average, above 0.75 is very good.</p>
 <div class="seg" id="seg-year"></div>
 <div class="legend" id="l-hydro"></div><div class="chart" id="c-hydro"></div></div>
 
+<div class="card"><h2>{soil_title}</h2>
+<p class="sub">{soil_why} Soil moisture is TerraClimate monthly data for {len(d['soil']['sub_watersheds'])} sub-watersheds ({', '.join(d['soil']['sub_watersheds'])}), {d['soil']['months'][0][:4]}–{d['soil']['months'][1][:4]}; the model only sees the last complete month. Daily accuracy (NSE) on 2020–2023, by year:</p>
+<div class="legend" id="l-soil"></div><div class="chart" id="c-soil"></div>
+<div class="tiles" style="margin-top:14px">{soil_tiles}</div>
+<p class="sub" style="margin-top:12px">{soil_note}</p></div>
+
 <h2 class="sec">Flood warning</h2>
 <div class="card"><h2>Today's data warns of high flows {good_days} day{'s' if good_days > 1 else ''} ahead; a rain forecast stretches that to a week</h2>
-<p class="sub">High-flow day = above the 95th percentile of daily inflow. Test years 2020–2025. Rain forecast = actual rainfall used as a perfect forecast (best case).</p>
+<p class="sub">High-flow day = above the 95th percentile of daily inflow. Test years 2020–2023. Rain forecast = actual rainfall used as a perfect forecast (best case).</p>
 <div class="legend" id="l-lead"></div>
 <div class="row2"><div><div class="chart" id="c-lead1"></div></div><div><div class="chart" id="c-lead2"></div></div></div></div>
 {extra}
 
 <h2 class="sec">Comparing approaches</h2>
 <div class="card"><h2>{ladder_title}</h2>
-<p class="sub">Every way we tried to predict daily inflow, scored on the same unseen years (2020–2025). “Same as yesterday” needs today’s reading, so it only works one day ahead. Hover a row for more scores.</p>
+<p class="sub">Every way we tried to predict daily inflow, scored on the same unseen years (2020–2023). “Same as yesterday” needs today’s reading, so it only works one day ahead. NSE: 1 = perfect, 0 = no better than the seasonal average. Hover a row for more scores.</p>
 <div class="chart" id="c-ladder"></div></div>
 <div class="card"><h2>{matrix_title}</h2>
 <p class="sub">Monsoon-total forecast error not exceeded in 4 of 5 years, for each approach (rows) and forecast date (columns). ✓ / bold = within ±{GOOD}%, i.e. reasonably informed. Rain-forecast rows use actual rainfall as a perfect forecast. Hover for the typical error.</p>
@@ -823,7 +885,7 @@ def page(d):
 <p style="color:var(--ink2)">Python 3.12, packages in requirements.txt. Input data (not in the repository) goes in data/ as described in the README. Then:</p>
 <pre>cd src
 ../.venv/bin/python prepare.py && ../.venv/bin/python inflow_model.py && ../.venv/bin/python peak_analysis.py
-../.venv/bin/python dam_analysis.py && ../.venv/bin/python cell_response.py
+../.venv/bin/python dam_analysis.py && ../.venv/bin/python cell_response.py && ../.venv/bin/python soil_test.py
 ../.venv/bin/python build_dam_reports.py</pre></details>
 <p class="foot">WELL Labs Water Data Hackathon · Theme 2 / Question 3 · generated by src/build_dam_reports.py</p>
 </div>"""
@@ -843,9 +905,10 @@ def main():
     inflow = json.loads((OUT / "inflow_results.json").read_text())
     fixes = json.loads((OUT / "data_fixes.json").read_text())
     CR = json.loads((OUT / "cell_response.json").read_text())
+    SOIL = json.loads((OUT / "soil_results.json").read_text())
     df = pd.read_parquet(ROOT / "data" / "processed" / "daily.parquet")
     for dam, meta in DAMS.items():
-        html = page(dam_data(dam, R, inflow, fixes, CR, df))
+        html = page(dam_data(dam, R, inflow, fixes, CR, df, SOIL))
         (OUT / meta["file"]).write_text(html)
         print(f"wrote outputs/{meta['file']} ({len(html) / 1e6:.2f} MB)")
 

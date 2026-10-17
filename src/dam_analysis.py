@@ -1,8 +1,8 @@
 """KRS and Hemavathy: daily inflow, monsoon-total forecast, warning lead time, river-network tests.
 
-1. Daily inflow for both dams with the same gradient-boosting setup (fit 1991-2019, test 2020-2025).
+1. Daily inflow for both dams with the same gradient-boosting setup (fit 1991-2019, test 2020-2023).
    Rain enters as distance-band features plus per-grid-cell routed rain (cell_response.py: every
-   cell has its own delay and multiplier). Hemavathy has no gauged dam upstream, so the like-for-like
+   cell has its own delay and multiplier) and last month's soil moisture (soil.py). Hemavathy has no gauged dam upstream, so the like-for-like
    KRS comparison is the rain-only KRS model. Also: peaks, and lead times of 1-7 days with and
    without a (perfect) rain forecast.
 2. Total Jun-Sep inflow forecast for both dams from each issue date (leave-one-year-out),
@@ -35,6 +35,7 @@ OUT = ROOT / "outputs"
 KRS_DAM = (76.575, 12.422)
 CAP = {"krs": 49.45, "hemavathy": 37.10}
 BANDS = ["near", "mid", "far"]
+TEST_END = 2023  # soil-moisture data ends 2023; all daily tests use 2020-2023
 
 
 def km(lon1, lat1, lon2, lat2):
@@ -139,7 +140,7 @@ def run_daily(X, q):
     y = np.log1p(q)
     yrs = q.index.year
     ok = X.notna().all(axis=1) & y.notna()
-    trv, te = ok & (yrs <= 2019), ok & (yrs >= 2020)
+    trv, te = ok & (yrs <= 2019), ok & (yrs >= 2020) & (yrs <= TEST_END)
     m = gb().fit(X[trv], y[trv])
     cap = lambda z: np.clip(z, 0, y[trv].max())
     smear = np.mean(np.exp(y[trv] - cap(m.predict(X[trv]))))
@@ -150,7 +151,7 @@ def run_daily(X, q):
 
 def baselines(q):
     yrs = q.index.year
-    tr, te = yrs <= 2019, (yrs >= 2020) & q.notna() & q.shift(1).notna()
+    tr, te = yrs <= 2019, (yrs >= 2020) & (yrs <= TEST_END) & q.notna() & q.shift(1).notna()
     clim = q[tr].groupby(q.index[tr].dayofyear).mean().rolling(15, center=True, min_periods=1).mean()
     c = pd.Series(q.index.dayofyear.map(clim).values, index=q.index)
     return {"Climatology": (metrics(q[te], c[te]), c[te]),
@@ -198,15 +199,16 @@ RAIN_HORIZONS = {"No rain forecast": 0, "+ next 7 days of rain": 7, "+ next 15 d
 ISSUES = [(6, 1), (6, 15), (7, 1), (7, 15), (8, 1), (8, 15), (9, 1), (9, 15)]
 
 
-def monsoon_inflow(df, rain_basin, dam, upstream=()):
+def monsoon_inflow(df, rain_basin, dam, upstream=(), extra=None, years=range(1991, 2026)):
     """Total 1 Jun - 30 Sep inflow (TMC) forecast from each issue date, leave-one-year-out.
 
     Forecast = inflow already observed (1 Jun .. issue date) + predicted remaining inflow.
     Ridge per issue date. Rain-forecast variants add the actual rain over the next H days
-    (a perfect forecast: an upper bound on what a real forecast could add)."""
+    (a perfect forecast: an upper bound on what a real forecast could add).
+    extra(year, issue_date) -> dict adds more inputs (e.g. soil moisture); years limits the record."""
     q = df[f"{dam}_inflow"].interpolate(limit=5).fillna(0) * 86400 / 1e9  # TMC/day
     rows = []
-    for year in range(1991, 2026):
+    for year in years:
         jun1, sep30 = pd.Timestamp(year, 6, 1), pd.Timestamp(year, 9, 30)
         total = q[jun1:sep30].sum()
         for m, d in ISSUES:
@@ -218,6 +220,8 @@ def monsoon_inflow(df, rain_basin, dam, upstream=()):
                  "storage_pct": df.at[t, f"{dam}_pct"]}
             for u in upstream:
                 r[f"{u}_pct"] = df.at[t, f"{u}_pct"]
+            if extra is not None:
+                r.update({f"x_{k}": v for k, v in extra(year, t).items()})
             for name, H in RAIN_HORIZONS.items():
                 if H:
                     stop = min(t + pd.Timedelta(days=H), sep30)
@@ -226,6 +230,7 @@ def monsoon_inflow(df, rain_basin, dam, upstream=()):
     rows = pd.DataFrame(rows)
     rows["storage_pct"] = rows.storage_pct.fillna(rows.groupby("issue").storage_pct.transform("median"))
     base = ["sofar", "last7", "rain_sofar", "rain_last30", "rain_may", "storage_pct"] + [f"{u}_pct" for u in upstream]
+    base += [c for c in rows.columns if c.startswith("x_")]
     rows[base] = rows[base].fillna(rows.groupby("issue")[base].transform("median"))
     mean_total = rows.groupby("year").total.first().mean()
     out = []
@@ -286,7 +291,7 @@ def lead_time(rain, df, q, upstream=(), extra=None):
         fut["fut_max_day"] = rain["basin"].rolling(h).max().shift(-h)
         for variant, X in [("Known on the day", base), ("+ rain forecast", base.join(fut))]:
             ok = X.notna().all(axis=1) & y.notna()
-            trv, te = ok & (yrs <= 2019), ok & (yrs >= 2020)
+            trv, te = ok & (yrs <= 2019), ok & (yrs >= 2020) & (yrs <= TEST_END)
             m = gb().fit(X[trv], y[trv])
             cap = lambda z: np.clip(z, 0, y[trv].max())
             smear = np.mean(np.exp(y[trv] - cap(m.predict(X[trv]))))
@@ -365,9 +370,13 @@ def main():
     routed_h, routed_k = cm_h["routed"], cm_k["routed"]
     rain_only = ["routed_rain_total", "routed_rain_wetfast"]
     Xh0, Xk0 = features(rain_h, df), features(rain_k, df, upstream=["harangi", "hemavathy"])
-    Xh = Xh0.join(routed_h)
-    Xk_rain = features(rain_k, df).join(routed_k[rain_only])
-    Xk_full = Xk0.join(routed_k)
+    # monthly soil moisture (TerraClimate, last complete month); data end 2023 -> test 2020-2023
+    from soil import SOIL_ZIP, load_terraclimate, soil_daily
+    soil_h = soil_daily(load_terraclimate(DATA / SOIL_ZIP["hemavathy"])[0], df.index)
+    soil_k = soil_daily(load_terraclimate(DATA / SOIL_ZIP["krs"])[0], df.index)
+    Xh = Xh0.join(routed_h).join(soil_h)
+    Xk_rain = features(rain_k, df).join(routed_k[rain_only]).join(soil_k)
+    Xk_full = Xk0.join(routed_k).join(soil_k)
     daily, preds = {}, {}
     for key, X, q in [("hemavathy|Rain only", Xh, q_h),
                       ("hemavathy|Rain + past inflow", Xh.join(ar_feats(q_h)), q_h),
@@ -413,8 +422,9 @@ def main():
                   {k[:14]: (v["median_abs_pct_err"], v["p80_abs_pct_err"], v["median_bias_pct"])
                    for k, v in r.items() if isinstance(v, dict)})
 
-    R["lead_time"] = {"hemavathy": lead_time(rain_h, df, q_h, extra=routed_h),
-                      "krs": lead_time(rain_k, df, q_k, ["harangi", "hemavathy"], extra=routed_k)}
+    R["lead_time"] = {"hemavathy": lead_time(rain_h, df, q_h, extra=routed_h.join(soil_h)),
+                      "krs": lead_time(rain_k, df, q_k, ["harangi", "hemavathy"], extra=routed_k.join(soil_k))}
+    R["test_years"] = [2020, TEST_END]
 
     # ---- 3. river network experiments (test NSE, same protocol)
     exps = {}
