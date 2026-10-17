@@ -75,7 +75,7 @@ def eda(dam, df, R):
 
 
 def ladder(dam, R, cc):
-    """Every daily-inflow approach we tried, scored the same way on 2020-2025."""
+    """Every daily-inflow approach we tried, scored the same way on 2020-2023."""
     daily, rp, bp, pk = R["daily"], R["river_experiments"], R["baseline_peaks"], R["peaks"]
     fromd = lambda k: (daily[k]["all"]["NSE"], (bp.get(k) or pk.get(k)))
     fromr = lambda k: (rp[k]["all"]["NSE"], rp[k]["peaks"])

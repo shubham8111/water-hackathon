@@ -6,7 +6,18 @@ WELL Labs Water Data Hackathon, Theme 2 (reservoir storage assessment using infl
 
 We answer it for two Cauvery dams, **Krishnaraja Sagar (KRS)** and **Hemavathy**, by forecasting the **total June–September inflow**. We use IMD 0.25° gridded daily rainfall over each catchment, daily dam records for KRS, Hemavathy and Harangi (1991–2025), and TerraClimate monthly soil moisture (1991–2023).
 
-## Reports
+## Final results
+
+- [`outputs/final_report.html`](outputs/final_report.html): one page, both dams, the three questions and their answers.
+- [`outputs/presentation.html`](outputs/presentation.html): 12 slides for the hackathon (← → to move).
+
+| Question | Answer |
+|---|---|
+| 1. How much water will the monsoon bring? | June–September inflow decides storage: KRS ends September ≥90% full in 19 of 21 years above 86 TMC of inflow. We forecast it with an 80% likely range by replaying every past monsoon's remaining rain. |
+| 2. How early can engineers know? | From **15 August** at both dams (4 years in 5 within ±20%), or 1 August with a 30-day rain forecast. A dry season is flagged by 15 August (10 of 12 dry years at KRS, 11 of 12 at Hemavathy). |
+| 3. What arrives in the next 15 days? | Typical error ±19% (KRS) and ±22% (Hemavathy) with a 15-day rain forecast; today's data alone gives ±48% / ±44%. |
+
+## Detailed reports
 
 Two self-contained, chart-led reports. Each is a single file that works offline: download it and open it in any browser. GitHub does not render HTML.
 
@@ -42,6 +53,8 @@ Results are on data the models never saw. The monsoon total is scored by leaving
 - **A reasonably informed estimate is possible from 15 August**, or from 1 August if a 30-day rain forecast is available.
 - **Before July the model is no better than assuming an average year.** A median of about 55% of the season's inflow arrives after 1 August.
 - **Monsoon inflow varies hugely from year to year:** KRS 41–252 TMC, Hemavathy 25–115 TMC.
+
+**Replaying past monsoons (ensemble forecast).** On each forecast date the inflow so far and today's state are fixed, and the rest of the season is replayed with every other year's rain. The middle of the replays is slightly more accurate than the single forecast at most dates (KRS on 15 Aug: 4-in-5 error 19% → 18%; 15 Jun: 58% → 46%), and the replays give an 80% likely range (it contained the actual total 69–89% of the time) and the chance of a dry season.
 
 **Heavy-rain days.** Besides the 1st and 15th of each month, the monsoon-total forecast is also re-issued on every heavy-rain day: catchment-average rain in the top 5% of monsoon days, about 3 a year.
 - The updated forecast is typically closer than the last scheduled one: KRS ±21% → ±15%, Hemavathy ±18% → ±11%.
@@ -99,6 +112,8 @@ src/
   soil_test.py          # with vs without soil data, daily model and monsoon total
   event_forecast.py     # monsoon total re-issued on heavy-rain days; next-15-day inflow
   paper_compare.py      # Hemavathy: the published model's method rebuilt on our data, both test setups
+  esp_forecast.py       # monsoon total by replaying every past monsoon's remaining rain (range + dry-season odds)
+  build_final.py        # outputs/final_report.html and outputs/presentation.html
   build_dam_reports.py  # builds outputs/KRS_insights.html and outputs/Hemavathy_insights.html
   peak_analysis.py      # KRS peak events (thresholds used by the analyses)
   season_forecast.py, one_shot.py, lead_time.py   # earlier KRS-only analyses (30-Sep storage)
@@ -138,6 +153,8 @@ cd src
 ../.venv/bin/python soil_test.py          # -> outputs/soil_results.json
 ../.venv/bin/python event_forecast.py     # -> outputs/event_results.json
 ../.venv/bin/python paper_compare.py      # -> outputs/paper_compare.json
+../.venv/bin/python esp_forecast.py       # -> outputs/esp_results.json
+../.venv/bin/python build_final.py        # -> outputs/final_report.html, outputs/presentation.html
 ../.venv/bin/python build_dam_reports.py  # -> outputs/KRS_insights.html, outputs/Hemavathy_insights.html
 ```
 
