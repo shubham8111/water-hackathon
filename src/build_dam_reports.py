@@ -1,6 +1,6 @@
 """Build two insight-first, chart-led reports: outputs/KRS_insights.html and outputs/Hemavathy_insights.html.
 
-Reads outputs/dam_results.json (run dam_analysis.py first), outputs/inflow_results.json
+Reads outputs/dam_results.json (run dam_analysis.py first), outputs/event_results.json, outputs/inflow_results.json
 and outputs/data_fixes.json. Self-contained: d3 and all data are inlined, so the files open offline.
 """
 import json
@@ -12,6 +12,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "outputs"
 NONE, F30 = "No rain forecast", "+ next 30 days"
+ISSUES = [(6, 1), (6, 15), (7, 1), (7, 15), (8, 1), (8, 15), (9, 1), (9, 15)]
 GOOD = 20  # "reasonably informed": 4 years in 5 within +/-20% of the actual monsoon total
 DAMS = {
     "krs": {"name": "Krishnaraja Sagar (KRS)", "short": "KRS", "file": "KRS_insights.html", "cap": 49.45},
@@ -104,7 +105,7 @@ def ladder(dam, R, cc):
              "final": "used in this report" in lab} for g, lab, (n, p) in items]
 
 
-def dam_data(dam, R, inflow, fixes, CR, df, SOIL):
+def dam_data(dam, R, inflow, fixes, CR, df, SOIL, EV):
     mi = R["monsoon_inflow"][dam]
     fc = []
     for r in mi["by_issue"]:
@@ -134,6 +135,19 @@ def dam_data(dam, R, inflow, fixes, CR, df, SOIL):
                  "corr": so["checks"]["soil_vs_wetness_index_corr"], "corr_anom": so["checks"]["soil_vs_wetness_index_corr_anomaly"],
                  "monsoon": [{"issue": issue_label(a["issue"]), "without": a["p80"], "with": b["p80"]}
                              for a, b in zip(so["monsoon_total"]["Without soil data"], so["monsoon_total"]["With soil data"])]}
+    se = EV[dam]["season"]
+    reg_dos = {(pd.Timestamp(2001, m, dd) - pd.Timestamp(2001, 6, 1)).days: f"{dd} {pd.Timestamp(2001, m, 1):%b}" for m, dd in ISSUES}
+    traj = {}
+    for y, t in se["trajectory"].items():
+        pts = [{"dos": k, "date": lab, "f": t["forecast"][k], "heavy": False} for k, lab in reg_dos.items()]
+        pts += [{"dos": e["dos"], "date": e["date"], "f": e["forecast"], "heavy": True, "rain": e["rain_mm"],
+                 "prev": e["prev"], "prev_date": e["prev_date"]} for e in t["events"]]
+        traj[y] = {"actual": t["actual"], "rain": t["rain"], "pts": sorted(pts, key=lambda r: r["dos"])}
+    d["events"] = {"summary": se["summary"], "by_month": se["by_month"], "traj": traj,
+                   "default": max(traj, key=lambda y: traj[y]["actual"])}
+    n15 = EV[dam]["next15"]
+    d["next15"] = {"models": n15["models"], "series": n15["series"], "n_heavy": n15["n_heavy_test_days"],
+                   "mean_volume": n15["mean_volume_tmc"]}
     other = "hemavathy" if dam == "krs" else "krs"
     d["soil_other"] = {"name": DAMS[other]["short"], "without": SOIL[other]["daily"]["Without soil data"]["NSE"],
                        "with": SOIL[other]["daily"]["With soil data"]["NSE"]}
@@ -221,6 +235,7 @@ header p { margin:0; color:var(--ink2); max-width:70ch; }
 .nodes { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:10px; }
 .nodes.two { grid-template-columns:1fr 1fr; }
 .nodes.four { grid-template-columns:repeat(4,1fr); }
+.nodes.three { grid-template-columns:repeat(3,1fr); }
 .node { border:1px solid var(--line); border-left:4px solid var(--c, var(--ink3)); border-radius:10px; padding:10px 12px; background:#fff; font-size:.85rem; color:var(--ink2); }
 .node b { display:block; color:var(--ink); font-size:.9rem; margin-bottom:3px; }
 .node ul { margin:4px 0 0; padding-left:16px; } .node li { margin:2px 0; }
@@ -229,7 +244,7 @@ header p { margin:0; color:var(--ink2); max-width:70ch; }
 .down::before { content:""; position:absolute; left:50%; top:4px; bottom:8px; border-left:2px solid var(--axis); }
 .down::after { content:""; position:absolute; left:calc(50% - 6px); bottom:2px; border:6px solid transparent; border-top:8px solid var(--axis); border-bottom:0; }
 .n-data { --c:#7d8893; } .n-prep { --c:#2a78d6; } .n-model { --c:#eb6834; } .n-out { --c:#1d7a43; }
-@media (max-width:760px) { .stage { grid-template-columns:1fr; gap:6px; } .down { margin-left:0; } .nodes.two { grid-template-columns:1fr; } .nodes.four { grid-template-columns:1fr 1fr; } }
+@media (max-width:760px) { .stage { grid-template-columns:1fr; gap:6px; } .down { margin-left:0; } .nodes.two { grid-template-columns:1fr; } .nodes.four { grid-template-columns:1fr 1fr; } .nodes.three { grid-template-columns:1fr; } }
 h2.sec { font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; color:var(--ink2); margin:40px 0 -6px; font-weight:600; }
 .row2 > div h3 { font-size:.95rem; margin:0 0 4px; font-weight:600; }
 @media (max-width:760px) { .row2 { grid-template-columns:1fr; } .card { padding:18px 16px; } header h1 { font-size:1.6rem; } }
@@ -243,6 +258,7 @@ h2.sec { font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; color:
 .legend i.area { height:10px; border-radius:3px; }
 .seg { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; margin:0 0 10px; flex-wrap:wrap; }
 .seg button { font:inherit; font-size:.85rem; border:0; background:var(--panel); color:var(--ink2); padding:6px 12px; cursor:pointer; }
+select.yr { font:inherit; font-size:.85rem; border:1px solid var(--line); border-radius:8px; padding:6px 10px; margin:0 0 10px; background:var(--panel); color:var(--ink); }
 .seg button + button { border-left:1px solid var(--line); }
 .seg button[aria-pressed=true] { background:var(--ink); color:#fff; }
 .axis text { fill:var(--ink3); font-size:11.5px; }
@@ -639,6 +655,84 @@ function chartSoil() {
   legend(document.getElementById('l-soil'), [{ n: 'Without soil data', c: col.without, cls: 'area' }, { n: 'With soil data', c: col.with, cls: 'area' }]);
 }
 
+/* ---- heavy-rain updates and next 15 days ------------------------------------------ */
+let evYear = null, n15Year = null;
+function chartEvents() {
+  const T = D.events.traj[evYear], el = document.getElementById('c-events'), m = { t: 28, r: 16, b: 30, l: 48 }, f = frame(el, 360, m);
+  const rainH = 56, gap = 22, top = f.ih - rainH - gap;
+  const x = d3.scaleLinear().domain([0, 121]).range([0, f.iw]);
+  const ymax = d3.max([T.actual * 1.25, ...T.pts.map((p) => p.f)]) * 1.05;
+  const y = d3.scaleLinear().domain([0, ymax]).nice().range([top, 0]);
+  f.g.append('g').attr('class', 'grid').call(d3.axisLeft(y).ticks(4).tickSize(-f.iw).tickFormat(''));
+  f.g.append('g').attr('class', 'axis').call(d3.axisLeft(y).ticks(4).tickSizeOuter(0)).call((a) => a.select('.domain').remove());
+  yTitle(f, 'Forecast of the June–September total, TMC');
+  f.g.append('rect').attr('x', 0).attr('width', f.iw).attr('y', y(T.actual * 1.2)).attr('height', y(T.actual * 0.8) - y(T.actual * 1.2)).attr('fill', 'rgba(29,122,67,.08)');
+  f.g.append('line').attr('x1', 0).attr('x2', f.iw).attr('y1', y(T.actual)).attr('y2', y(T.actual)).attr('stroke', C.ink).attr('stroke-dasharray', '5 4');
+  f.g.append('text').attr('class', 'lbl2').attr('x', f.iw - 4).attr('y', y(T.actual) - 6).attr('text-anchor', 'end').text(`Actual ${T.actual} TMC`);
+  f.g.append('path').datum(T.pts).attr('fill', 'none').attr('stroke', C.ink3).attr('stroke-width', 1.5).attr('d', d3.line().x((p) => x(p.dos)).y((p) => y(p.f)));
+  const err = (p) => Math.round((p.f - T.actual) / T.actual * 100);
+  const sgn = (v) => (v > 0 ? '+' : '') + v + '%';
+  f.g.selectAll(null).data(T.pts).join('circle').attr('cx', (p) => x(p.dos)).attr('cy', (p) => y(p.f)).attr('r', (p) => p.heavy ? 6 : 5)
+    .attr('fill', (p) => p.heavy ? C.orange : C.blue).attr('stroke', '#fff').attr('stroke-width', 2)
+    .on('mousemove', (ev, p) => showTip(ev, `<b>${p.date} ${evYear}</b>` + (p.heavy ? `<div class="lbl2">heavy rain: ${p.rain} mm over the catchment</div>` : '<div class="lbl2">scheduled forecast</div>')
+      + row(p.heavy ? C.orange : C.blue, 'Forecast', `${p.f} TMC (${sgn(err(p))})`)
+      + (p.heavy ? row(C.blue, `Last scheduled (${p.prev_date})`, `${p.prev} TMC (${sgn(Math.round((p.prev - T.actual) / T.actual * 100))})`) : '')))
+    .on('mouseleave', hideTip);
+  const ry = d3.scaleLinear().domain([0, Math.max(40, d3.max(T.rain))]).range([0, rainH]);
+  const r0 = top + gap + rainH, heavyDos = new Set(T.pts.filter((p) => p.heavy).map((p) => p.dos));
+  f.g.selectAll(null).data(T.rain).join('rect').attr('x', (v, i) => x(i) - 1.2).attr('width', 2.4).attr('y', (v) => r0 - ry(v)).attr('height', (v) => ry(v))
+    .attr('fill', (v, i) => heavyDos.has(i) ? C.orange : '#c3ccd5');
+  f.g.append('text').attr('class', 'lbl2').attr('x', 0).attr('y', top + gap - 6).text('Daily catchment rain');
+  const months = [[0, 'Jun'], [30, 'Jul'], [61, 'Aug'], [92, 'Sep']];
+  f.g.append('g').attr('class', 'axis').attr('transform', `translate(0,${r0})`).call(d3.axisBottom(x).tickValues(months.map((m) => m[0])).tickFormat((v) => months.find((m) => m[0] === v)[1]).tickSizeOuter(0));
+}
+function selEvents() {
+  const el = document.getElementById('sel-events'), yrs = Object.keys(D.events.traj).map(Number);
+  evYear = D.events.default;
+  el.innerHTML = yrs.map((y) => `<option value="${y}" ${y === +evYear ? 'selected' : ''}>${y} · ${D.events.traj[y].pts.filter((p) => p.heavy).length} heavy-rain updates</option>`).join('');
+  el.onchange = () => { evYear = el.value; chartEvents(); };
+}
+const N15 = [{ k: 'Average year', n: 'Assume an average year', c: '#9aa6b2' }, { k: 'Same as last 15 days', n: 'Same as the last 15 days', c: '#9aa6b2' },
+  { k: "Today's state, no rain forecast", n: "Today's state, no rain forecast", c: C.blue }, { k: '+ next 7 days of rain', n: '+ 7-day rain forecast', c: C.blue },
+  { k: '+ next 15 days of rain', n: '+ 15-day rain forecast', c: C.orange }];
+function chartN15Bars() {
+  const M = D.next15.models;
+  hbar('c-n15bars', N15.map((s) => ({ label: s.n, v: M[s.k].median_pct, c: s.c,
+    tip: row('#fff', 'Typical error', `±${Math.round(M[s.k].median_pct)}%`) + row('#fff', '4 years in 5 within', `±${Math.round(M[s.k].p80_pct)}%`)
+      + row('#fff', 'Within ±25%', pct(M[s.k].within_25 * 100)) + row('#fff', 'On heavy-rain days', `±${Math.round(M[s.k].heavy_median_pct)}%`)
+      + row('#fff', 'NSE', M[s.k].NSE.toFixed(2)) })), (v) => `±${Math.round(v)}%`, C.blue);
+}
+function chartN15() {
+  const S = D.next15.series[n15Year], el = document.getElementById('c-n15'), m = { t: 28, r: 16, b: 30, l: 48 }, f = frame(el, 320, m);
+  const rows = S.dates.map((d, i) => ({ t: new Date(d), a: S.actual[i], n: S["Today's state, no rain forecast"][i], r: S['+ next 15 days of rain'][i], c: S['Average year'][i] }));
+  const x = d3.scaleTime().domain(d3.extent(rows, (d) => d.t)).range([0, f.iw]);
+  const y = d3.scaleLinear().domain([0, d3.max(rows, (d) => Math.max(d.a, d.n, d.r)) * 1.05]).nice().range([f.ih, 0]);
+  yAxis(f, y, (v) => v); yTitle(f, 'Inflow over the next 15 days, TMC');
+  f.g.append('g').attr('class', 'axis').attr('transform', `translate(0,${f.ih})`).call(d3.axisBottom(x).ticks(d3.timeMonth.every(1)).tickFormat(d3.timeFormat('%b')).tickSizeOuter(0));
+  S.heavy.forEach((h) => f.g.append('line').attr('x1', x(new Date(h))).attr('x2', x(new Date(h))).attr('y1', f.ih).attr('y2', f.ih - 10).attr('stroke', C.orange).attr('stroke-width', 3));
+  f.g.append('path').datum(rows).attr('fill', 'rgba(21,32,43,.08)').attr('d', d3.area().x((d) => x(d.t)).y0(f.ih).y1((d) => y(d.a)));
+  const L = [{ k: 'a', n: 'Actual', c: C.ink, w: 1.5 }, { k: 'c', n: 'Average year', c: C.ink3, w: 1.5, dash: true },
+    { k: 'n', n: "Today's state, no rain forecast", c: C.blue, w: 2 }, { k: 'r', n: '+ 15-day rain forecast', c: C.orange, w: 2 }];
+  L.forEach((s) => f.g.append('path').datum(rows).attr('fill', 'none').attr('stroke', s.c).attr('stroke-width', s.w).attr('stroke-dasharray', s.dash ? '5 4' : null)
+    .attr('d', d3.line().x((d) => x(d.t)).y((d) => y(d[s.k]))));
+  legend(document.getElementById('l-n15'), L.map((s) => ({ n: s.n, c: s.c, cls: s.dash ? 'dash' : '' })).concat([{ n: 'Heavy-rain day', c: C.orange, cls: 'dot' }]));
+  const bis = d3.bisector((d) => d.t).center, hv = new Set(S.heavy);
+  const v = f.g.append('line').attr('y1', 0).attr('y2', f.ih).attr('stroke', C.ink3).attr('opacity', 0);
+  f.g.append('rect').attr('width', f.iw).attr('height', f.ih).attr('fill', 'transparent')
+    .on('mousemove', (ev) => { const d = rows[bis(rows, x.invert(d3.pointer(ev)[0]))];
+      v.attr('x1', x(d.t)).attr('x2', x(d.t)).attr('opacity', .5);
+      showTip(ev, `<b>Forecast made ${d3.timeFormat('%d %b %Y')(d.t)}</b>` + (hv.has(d3.timeFormat('%Y-%m-%d')(d.t)) ? '<div class="lbl2">heavy-rain day</div>' : '')
+        + L.map((s) => row(s.c, s.n, d[s.k].toFixed(1) + ' TMC')).join('')); })
+    .on('mouseleave', () => { v.attr('opacity', 0); hideTip(); });
+}
+function segN15() {
+  const el = document.getElementById('seg-n15'), yrs = Object.keys(D.next15.series);
+  n15Year = yrs.reduce((a, b) => d3.max(D.next15.series[b].actual) > d3.max(D.next15.series[a].actual) ? b : a);
+  yrs.forEach((k) => { const b = document.createElement('button'); b.textContent = k; b.setAttribute('aria-pressed', k === n15Year);
+    b.onclick = () => { n15Year = k; el.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b)); chartN15(); };
+    el.appendChild(b); });
+}
+
 function drawAll() {
   chartForecast(); chartStack(); chartRelations(); chartScatter();
   const R = D.lag_rain, bands = [{ k: 'far', n: 'Far (Ghats)', c: C.blue }, { k: 'mid', n: 'Middle', c: C.orange }, { k: 'near', n: 'Near dam', c: C.green }];
@@ -657,9 +751,9 @@ function drawAll() {
     tip: row('#fff', 'Peak size error', `${r.peak_err}%`) + row('#fff', 'Share of sharp rises caught', `${r.rise}%`) + row('#fff', 'Overall NSE', r.nse) })),
     (v) => `${v}%`, C.blue, 100);
   if (D.vs_krs) chartVsKrs();
-  chartLadder(); chartMatrix(); chartSoil();
+  chartLadder(); chartMatrix(); chartSoil(); chartEvents(); chartN15Bars(); chartN15();
 }
-segIssue(); segYear(); drawAll();
+segIssue(); segYear(); selEvents(); segN15(); drawAll();
 let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawAll, 150); });
 """
 
@@ -746,6 +840,33 @@ def page(d):
                  f"<b>Caveats:</b> this soil data is published with a long delay, so in real use a near-real-time soil-moisture product is needed; "
                  f"it ends in 2023, which is why daily scores in this report use 2020–2023. It overlaps our rain-based soil-wetness index "
                  f"(correlation {so['corr']}) but its month-to-month departures differ (correlation {so['corr_anom']}), which is where the extra information comes from.")
+    es = d["events"]["summary"]
+    same = abs(es["median_gain_points"] - es["ordinary_day_median_gain_points"]) < 1
+    ev_title = ("An extra forecast on a heavy-rain day helps, but no more than one on any other day" if same else
+                ("Heavy-rain days are worth an extra forecast: it beats an update on an ordinary day" if es["median_gain_points"] > es["ordinary_day_median_gain_points"]
+                 else "An extra forecast on a heavy-rain day helps less than one on an ordinary day"))
+    bm = {r["month"]: r for r in d["events"]["by_month"]}
+    ev_tiles = "".join(f'<div class="tile"><div class="k">{k}</div><div class="v">{v}</div><div class="s">{t}</div></div>' for k, v, t in [
+        ("Heavy-rain updates", f"{es['per_year']:.0f} a year", f"{es['events']} in 35 years · rain above {es['threshold_mm']:.0f} mm in a day over the catchment"),
+        ("Typical error", f"±{es['err_last_scheduled_median']:.0f}% → ±{es['err_updated_median']:.0f}%", f"last scheduled forecast (median {es['median_wait_days']:.0f} days earlier) → updated on the heavy-rain day"),
+        ("Updates that improve", f"{round(es['better_share'] * 100)}%", f"vs {round(es['ordinary_day_better_share'] * 100)}% for an update on an ordinary day after the same wait")])
+    ev_note = (f"<b>Why heavy rain adds little:</b> on the day of the storm its water has not reached the dam yet, and most of the season's uncertainty is the rain still to come. "
+               f"In June an update does not help at all (typical error {bm['June']['before']:.0f}% → {bm['June']['after']:.0f}%); in August it does "
+               f"({bm['August']['before']:.0f}% → {bm['August']['after']:.0f}%), but so does any later update, because more of the season has already been measured. "
+               "So: keep the regular dates, and treat a heavy-rain update as a fresh look, not a better forecast.")
+    N = d["next15"]["models"]
+    n0, n7, n15 = N["Today's state, no rain forecast"], N["+ next 7 days of rain"], N["+ next 15 days of rain"]
+    n15_title = (f"Water arriving in the next 15 days: typical error ±{n15['median_pct']:.0f}% with a 15-day rain forecast, "
+                 f"±{n0['median_pct']:.0f}% from today's state alone")
+    n15_tiles = "".join(f'<div class="tile"><div class="k">{k}</div><div class="v">{v}</div><div class="s">{t}</div></div>' for k, v, t in [
+        ("Accuracy (NSE)", f"{n0['NSE']:.2f} → {n7['NSE']:.2f} → {n15['NSE']:.2f}", "no rain forecast → 7-day → 15-day rain forecast"),
+        ("Within ±25%", f"{round(n0['within_25'] * 100)}% → {round(n15['within_25'] * 100)}%", "share of forecast days, without → with a 15-day rain forecast"),
+        ("On heavy-rain days", f"±{n15['heavy_median_pct']:.0f}%", f"typical error with a 15-day rain forecast ({d['next15']['n_heavy']} heavy-rain days in 2020–2023)")])
+    jun = lambda r: r["by_month"].get("6", r["by_month"].get(6))
+    n15_note = (f"<b>June is hardest:</b> the catchment is still dry, so the same rain gives very different inflow "
+                f"(typical June error ±{jun(n15):.0f}% even with the rain forecast). "
+                "The rain forecast here is the rain that actually fell, so these numbers are the best a real forecast could reach. "
+                + ("Future releases from Harangi and Hemavathy are not known in advance, so the model only sees today's releases." if d["dam"] == "krs" else ""))
     L = d["ladder"]
     fin, clim = next(r for r in L if r["final"]), L[0]
     ladder_title = (f"From NSE {clim['nse']:.2f} (seasonal average) to {fin['nse']:.2f}: "
@@ -758,8 +879,8 @@ def page(d):
                     f"{first_ok(M['rows'][4])}, while knowing only the next 7 days helps less")
     up = d["dam"] == "krs"
     node = lambda cls, title, body: f'<div class="node {cls}"><b>{title}</b>{body}</div>'
-    stage = lambda n, title, sub, nodes, two=False, four=False: (f'<div class="stage"><div class="sh"><span>{n}</span>{title}<small>{sub}</small></div>'
-                                                                  f'<div class="nodes{" two" if two else ""}{" four" if four else ""}">{"".join(nodes)}</div></div>')
+    stage = lambda n, title, sub, nodes, two=False, four=False, three=False: (f'<div class="stage"><div class="sh"><span>{n}</span>{title}<small>{sub}</small></div>'
+                                                                  f'<div class="nodes{" two" if two else ""}{" four" if four else ""}{" three" if three else ""}">{"".join(nodes)}</div></div>')
     down = '<div class="down"></div>'
     flow = '<div class="flow">' + down.join([
         stage(1, "Collect data", "1991–2025, daily", four=True, nodes=[
@@ -783,7 +904,7 @@ def page(d):
             node("n-prep", "Upstream releases" if up else "Time of season",
                  "Harangi and Hemavathy releases over the last 5 days, and how full they are." if up
                  else "Day of the year, so the model knows where in the monsoon it is.")]),
-        stage(4, "Two models", "one for days, one for the season", [
+        stage(4, "Three models", "days, the next 15 days, the season", three=True, nodes=[
             node("n-model", "A. Daily inflow model",
                  "<ul><li>Gradient boosting (many small decision trees)</li><li>Predicts each day's inflow from the inputs above</li>"
                  "<li>Learns from 1991–2019</li><li>Also run 1–7 days ahead, with and without a rain forecast</li></ul>"),
@@ -791,14 +912,21 @@ def page(d):
                  "<ul><li>On each forecast date (1 Jun … 15 Sep): total = inflow already measured + predicted rest of season</li>"
                  "<li>Rest of season from inflow so far, last week's inflow, rain so far, May rain, last 30 days' rain, storage"
                  + (" and upstream storage" if up else "") + "</li><li>Simple linear (ridge) model, one per forecast date</li>"
-                 "<li>Variant: add the next 7–30 days' actual rain as a perfect rain forecast</li></ul>")], two=True),
+                 "<li>Re-issued on every heavy-rain day too (top 5% of monsoon days), with a local model fitted on nearby dates</li>"
+                 "<li>Variant: add the next 7–30 days' actual rain as a perfect rain forecast</li></ul>"),
+            node("n-model", "C. Next 15 days",
+                 "<ul><li>Gradient boosting on today's state: recent inflow and rain, soil wetness, storage"
+                 + (", upstream releases" if up else "") + "</li><li>Predicts the total inflow of the next 15 days</li>"
+                 "<li>With and without the rain of the next 7 or 15 days</li></ul>")]),
         stage(5, "Test fairly", "never score on data the model learned from", [
             node("n-model", "Daily model", "Learns from 1991–2019, scored only on 2020–2023 (soil data ends 2023). NSE: 1 = perfect, 0 = no better than the seasonal average. Flood peaks: size error on the peak day."),
-            node("n-model", "Monsoon total", f"Each of the {len(yrs)} years is forecast by a model trained on the other years. Error = % off that year's actual total.")], two=True),
+            node("n-model", "Monsoon total", f"Each of the {len(yrs)} years is forecast by a model trained on the other years. Error = % off that year's actual total."),
+            node("n-model", "Next 15 days", "Learns from 1991–2019, scored on every June–September day of 2020–2023. Error = % off the actual 15-day inflow.")], three=True),
         stage(6, "Results", "what an engineer gets", [
             node("n-out", "Daily inflow and flood warning",
                  f"NSE {d['daily_nse']:.2f}; high flows flagged {good_days} day{'s' if good_days > 1 else ''} ahead, up to a week with a rain forecast."),
-            node("n-out", "Monsoon total by date", f"Reliable (4 years in 5 within ±{GOOD}%) from {rf}; from {rfr} with a 30-day rain forecast.")], two=True),
+            node("n-out", "Monsoon total by date", f"Reliable (4 years in 5 within ±{GOOD}%) from {rf}; from {rfr} with a 30-day rain forecast."),
+            node("n-out", "Next 15 days", f"Typical error ±{n15['median_pct']:.0f}% with a 15-day rain forecast, ±{n0['median_pct']:.0f}% without.")], three=True),
     ]) + "</div>"
     fixes = "".join(f"<tr><td>{f['issue']}</td><td>{f['action']}</td><td class='n'>{f['count']}</td></tr>" for f in d["fixes"])
     a1 = at["1 Aug"]
@@ -834,6 +962,25 @@ def page(d):
 <div class="seg" id="seg-issue"></div>
 <div class="legend"><span><i class="dot" style="background:#2a78d6"></i>No rain forecast</span><span><i class="dot" style="background:#eb6834"></i>+ 30-day rain forecast</span><span><i class="area" style="background:rgba(29,122,67,.15)"></i>within ±20%</span></div>
 <div class="chart" id="c-scatter" style="max-width:620px"></div></div>
+
+<div class="card"><h2>{ev_title}</h2>
+<p class="sub">The monsoon-total forecast, re-issued on the regular dates (blue) and on every heavy-rain day (orange): a day when catchment-average rain is in the top 5% of monsoon days. Pick a year; hover a dot. Green band = within ±20% of the actual total.</p>
+<select class="yr" id="sel-events" aria-label="Year"></select>
+<div class="legend"><span><i class="dot" style="background:#2a78d6"></i>Regular date (1st and 15th)</span><span><i class="dot" style="background:#eb6834"></i>Heavy-rain day</span><span><i class="dash" style="background:#15202b"></i>Actual total</span></div>
+<div class="chart" id="c-events"></div>
+<div class="tiles" style="margin-top:14px">{ev_tiles}</div>
+<p class="sub" style="margin-top:12px">{ev_note}</p></div>
+
+<h2 class="sec">The next 15 days</h2>
+<div class="card"><h2>{n15_title}</h2>
+<p class="sub">Total inflow over the 15 days after each forecast day, June–September of the test years 2020–2023 (never seen in training). Inputs: recent inflow and rain, soil wetness and soil moisture, storage{', upstream releases' if d['dam'] == 'krs' else ''}; plus, optionally, the rain of the coming days. Typical error, lower is better; hover a bar for more.</p>
+<div class="chart" id="c-n15bars"></div>
+<div class="tiles" style="margin-top:14px">{n15_tiles}</div></div>
+<div class="card"><h2>Forecast vs actual, day by day</h2>
+<p class="sub">Each point is the inflow expected over the next 15 days, plotted on the day the forecast is made. Orange ticks = heavy-rain days. Pick a year.</p>
+<div class="seg" id="seg-n15"></div>
+<div class="legend" id="l-n15"></div><div class="chart" id="c-n15"></div>
+<p class="sub" style="margin-top:12px">{n15_note}</p></div>
 
 <h2 class="sec">How the catchment responds</h2>
 
@@ -886,6 +1033,7 @@ def page(d):
 <pre>cd src
 ../.venv/bin/python prepare.py && ../.venv/bin/python inflow_model.py && ../.venv/bin/python peak_analysis.py
 ../.venv/bin/python dam_analysis.py && ../.venv/bin/python cell_response.py && ../.venv/bin/python soil_test.py
+../.venv/bin/python event_forecast.py
 ../.venv/bin/python build_dam_reports.py</pre></details>
 <p class="foot">WELL Labs Water Data Hackathon · Theme 2 / Question 3 · generated by src/build_dam_reports.py</p>
 </div>"""
@@ -906,9 +1054,10 @@ def main():
     fixes = json.loads((OUT / "data_fixes.json").read_text())
     CR = json.loads((OUT / "cell_response.json").read_text())
     SOIL = json.loads((OUT / "soil_results.json").read_text())
+    EV = json.loads((OUT / "event_results.json").read_text())
     df = pd.read_parquet(ROOT / "data" / "processed" / "daily.parquet")
     for dam, meta in DAMS.items():
-        html = page(dam_data(dam, R, inflow, fixes, CR, df, SOIL))
+        html = page(dam_data(dam, R, inflow, fixes, CR, df, SOIL, EV))
         (OUT / meta["file"]).write_text(html)
         print(f"wrote outputs/{meta['file']} ({len(html) / 1e6:.2f} MB)")
 

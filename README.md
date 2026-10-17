@@ -15,10 +15,11 @@ Two self-contained, chart-led reports. Each is a single file that works offline:
 
 Each report covers:
 1. **The monsoon, year by year.** Rainfall, inflow, outflow and 30-Sep storage for every year, with the same dry years highlighted throughout, and how these four relate to each other.
-2. **Forecasting the monsoon inflow.** Forecast error by the date the forecast is made, with and without a rain forecast, and forecast vs actual for each year.
-3. **How the catchment responds.** How much inflow rain produces and after what delay, as a map of each grid cell's multiplier and delay, plus the daily model against observations.
-4. **Flood warning.** How many days ahead high flows can be predicted.
-5. **Supporting detail.** Data fixes and the method.
+2. **Forecasting the monsoon inflow.** Forecast error by the date the forecast is made, with and without a rain forecast, forecast vs actual for each year, and extra forecasts issued on heavy-rain days.
+3. **The next 15 days.** How much water reaches the dam over the next 15 days, from today's state with and without a rain forecast.
+4. **How the catchment responds.** How much inflow rain produces and after what delay, as a map of each grid cell's multiplier and delay, plus the daily model against observations.
+5. **Flood warning.** How many days ahead high flows can be predicted.
+6. **Supporting detail.** Data fixes and the method.
 
 ## Key results
 
@@ -40,6 +41,24 @@ Results are on data the models never saw. The monsoon total is scored by leaving
 - **A reasonably informed estimate is possible from 15 August**, or from 1 August if a 30-day rain forecast is available.
 - **Before July the model is no better than assuming an average year.** A median of about 55% of the season's inflow arrives after 1 August.
 - **Monsoon inflow varies hugely from year to year:** KRS 41–252 TMC, Hemavathy 25–115 TMC.
+
+**Heavy-rain days.** Besides the 1st and 15th of each month, the monsoon-total forecast is also re-issued on every heavy-rain day: catchment-average rain in the top 5% of monsoon days, about 3 a year.
+- The updated forecast is typically closer than the last scheduled one: KRS ±21% → ±15%, Hemavathy ±18% → ±11%.
+- **But an update on an ordinary day after the same wait improves just as often (57–59% of the time).** On the day of the storm its water has not reached the dam yet, and most of the uncertainty is rain still to come. In June an update does not help at all.
+
+**Next 15 days** (test years 2020–2023, June–September)
+
+| Inflow over the next 15 days | KRS typical error | KRS NSE | Hemavathy typical error | Hemavathy NSE |
+|---|---|---|---|---|
+| Assume an average year | 59% | 0.21 | 49% | 0.30 |
+| Today's state, no rain forecast | 48% | 0.44 | 44% | 0.36 |
+| + 7-day rain forecast* | 32% | 0.81 | 31% | 0.74 |
+| + 15-day rain forecast* | **19%** | **0.93** | **22%** | **0.88** |
+
+\*Actual rainfall used as a perfect forecast (best case).
+
+- A rain forecast is what makes the 15-day outlook work; today's state alone is only a little better than assuming an average year.
+- June is hardest (typical error about ±40% even with the rain forecast), because the dry catchment's response to rain varies a lot.
 
 **Year by year**
 - **Dry years compound:** KRS gets 20% less rain, 55% less inflow, and ends September 64% full instead of 94%.
@@ -64,6 +83,7 @@ src/
   cell_response.py      # per-grid-cell multiplier and delay ("routed rain"), maps
   soil.py               # TerraClimate monthly soil data -> daily model inputs
   soil_test.py          # with vs without soil data, daily model and monsoon total
+  event_forecast.py     # monsoon total re-issued on heavy-rain days; next-15-day inflow
   build_dam_reports.py  # builds outputs/KRS_insights.html and outputs/Hemavathy_insights.html
   peak_analysis.py      # KRS peak events (thresholds used by the analyses)
   season_forecast.py, one_shot.py, lead_time.py   # earlier KRS-only analyses (30-Sep storage)
@@ -101,6 +121,7 @@ cd src
 ../.venv/bin/python dam_analysis.py       # -> outputs/dam_results.json
 ../.venv/bin/python cell_response.py      # -> outputs/cell_response.json
 ../.venv/bin/python soil_test.py          # -> outputs/soil_results.json
+../.venv/bin/python event_forecast.py     # -> outputs/event_results.json
 ../.venv/bin/python build_dam_reports.py  # -> outputs/KRS_insights.html, outputs/Hemavathy_insights.html
 ```
 
@@ -115,7 +136,8 @@ Random seeds are fixed, so a rerun gives the same numbers. Plain `pip install -r
 2. **Rainfall.** IMD cells overlapping each catchment, each weighted by its share of area inside the catchment.
 3. **Per-cell response.** A non-negative linear model learns, for every cell, how much of its rain reaches the dam on each of the next 14 days. Wetter soil yields more inflow from the same rain. For KRS, rain above Hemavathy dam is left out: it reaches KRS only through Hemavathy's releases, which are already an input. The output ("routed rain") feeds the daily model.
 4. **Daily inflow.** Gradient boosting on log inflow. Inputs are routed rain, rain lags by distance band, rain totals, soil wetness, last month's soil moisture, upstream releases (KRS only) and time of year. Trained on 1991–2019, tested on 2020–2023.
-5. **Monsoon total.** The forecast is the inflow already measured since 1 June plus the predicted remaining inflow. A ridge regression is fitted for each forecast date, scored by leaving one year out at a time. The rain-forecast variants add the actual rain of the following 7–30 days, which makes them a best case.
+5. **Monsoon total.** The forecast is the inflow already measured since 1 June plus the predicted remaining inflow. A ridge regression is fitted for each forecast date, scored by leaving one year out at a time. The rain-forecast variants add the actual rain of the following 7–30 days, which makes them a best case. Heavy-rain-day forecasts use a local version: for any issue day, a ridge fitted on the other years' days within ±7 days of it.
+6. **Next 15 days.** Gradient boosting on today's state (recent inflow and rain, soil wetness, soil moisture, storage, upstream releases for KRS), with and without the actual rain of the next 7 or 15 days. Trained on 1991–2019, tested on 2020–2023.
 
 ## Limitations
 
