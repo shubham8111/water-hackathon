@@ -16,6 +16,32 @@ from build_dam_reports import CSS, DAMS, GOOD, JS, NONE, F30, ROOT, OUT, eda, is
 HELPERS = JS.split("/* ---- 1. forecast error by date")[0]
 
 
+RECENT = ["2021", "2022", "2023", "2024", "2025"]  # "last 5 years" view used on slides 5 and 6
+
+
+def recent(dam, R, ESP, mi):
+    """Error by forecast date over the last 5 years only (each year still forecast by a model that never saw it).
+    '4 years in 5' = the 4th smallest of the 5 errors."""
+    yrs = ESP[dam]["years"]
+    tot = {str(k): v for k, v in R["monsoon_inflow"][dam]["by_year"].items()}
+    a = np.array([yrs[y]["actual"] for y in RECENT])
+    pe = lambda p: np.abs(np.array(p) - a) / a * 100
+    q4 = lambda e: round(float(np.sort(e)[3]), 1)
+    nse = lambda p: round(float(1 - ((a - np.array(p)) ** 2).sum() / ((a - a.mean()) ** 2).sum()), 2)
+    clim = [np.mean([v for k, v in tot.items() if k != y]) for y in RECENT]
+    tl = []
+    for j, (iss, v) in enumerate(mi.items()):
+        esp = [yrs[y]["issues"][j]["esp"] for y in RECENT]
+        f30 = [next(x[F30] for x in v["years"] if str(x["year"]) == y) for y in RECENT]
+        tl.append({"issue": iss, "esp": q4(pe(esp)), "esp_med": round(float(np.median(pe(esp))), 1),
+                   "f30": q4(pe(f30)), "f30_med": round(float(np.median(pe(f30))), 1),
+                   "clim": q4(pe(clim)), "clim_med": round(float(np.median(pe(clim))), 1),
+                   "esp_nse": nse(esp), "f30_nse": nse(f30), "seen": v["already_observed_pct"],
+                   "inside": int(sum(yrs[y]["issues"][j]["lo"] <= yrs[y]["actual"] <= yrs[y]["issues"][j]["hi"] for y in RECENT))})
+    first = lambda key: next((t["issue"] for t in tl if t[key] <= GOOD), None)
+    return {"timeline_recent": tl, "rel_timeline_recent": first("esp"), "relrain_timeline_recent": first("f30")}
+
+
 def collect():
     R = json.loads((OUT / "dam_results.json").read_text())
     CR = json.loads((OUT / "cell_response.json").read_text())
@@ -47,6 +73,7 @@ def collect():
         D["dams"][dam] = {
             "name": DAMS[dam]["name"], "short": DAMS[dam]["short"], "timeline": tl,
             "reliable": first("esp"), "reliable_rain": first("f30"),
+            **recent(dam, R, ESP, mi),
             "fans": ESP[dam]["years"], "eda": [{k: r[k] for k in ["year", "rain", "inflow", "pct_sep30", "dry"]} for r in rows],
             "eda_stats": st, "mean_total": R["monsoon_inflow"][dam]["mean_total_tmc"],
             "n15": {k: {x: n15[k][x] for x in ["median_pct", "p80_pct", "NSE", "within_25"]} for k in n15},
@@ -71,8 +98,8 @@ const DC = { krs: C.blue, hemavathy: C.green };
 const ISS = (d) => D.dams[d].timeline.map((t) => t.issue);
 
 /* error by forecast date, one dam */
-function chartTimeline(id, dam, h = 300) {
-  const T = D.dams[dam].timeline, el = document.getElementById(id), m = { t: 26, r: 12, b: 32, l: 40 }, f = frame(el, h, m);
+function chartTimeline(id, dam, h = 300, key = 'timeline') {
+  const T = D.dams[dam][key], el = document.getElementById(id), m = { t: 26, r: 12, b: 32, l: 40 }, f = frame(el, h, m);
   const x = d3.scalePoint().domain(T.map((t) => t.issue)).range([0, f.iw]).padding(0.2);
   const y = d3.scaleLinear().domain([0, 80]).range([f.ih, 0]).clamp(true);
   f.g.append('rect').attr('x', 0).attr('width', f.iw).attr('y', y(D.GOOD)).attr('height', f.ih - y(D.GOOD)).attr('fill', 'rgba(29,122,67,.08)');
@@ -88,10 +115,10 @@ function chartTimeline(id, dam, h = 300) {
     if (s.k !== 'clim') f.g.selectAll(null).data(T).join('circle').attr('cx', (t) => x(t.issue)).attr('cy', (t) => y(t[s.k])).attr('r', 4)
       .attr('fill', (t) => t[s.k] <= D.GOOD ? s.c : '#fff').attr('stroke', s.c).attr('stroke-width', 2);
   });
-  const rel = D.dams[dam].reliable;
+  const rel = key === 'timeline' ? D.dams[dam].reliable : D.dams[dam]['rel_' + key];
   if (rel) f.g.append('text').attr('class', 'lbl').attr('x', x(rel)).attr('y', y(T.find((t) => t.issue === rel).esp) - 12).attr('text-anchor', 'middle').text('✓ ' + rel);
   hover(f, x, T.map((t) => t.issue), (iss) => { const t = T.find((r) => r.issue === iss);
-    return `<b>Forecast made ${iss}</b><div class="lbl2">${t.seen}% of the season already measured · NSE ${t.esp_nse.toFixed(2)}, with 30-day rain forecast ${t.f30_nse.toFixed(2)}</div>` + S.map((s) => row(s.c, s.n, `±${Math.round(t[s.k])}% (typical ±${Math.round(t[s.k + '_med'])}%)`)).join(''); });
+    return `<b>Forecast made ${iss}</b><div class="lbl2">${t.seen}% of the season already measured${key === 'timeline' ? '' : ' · last 5 years'}</div>` + S.map((s) => row(s.c, s.n, `±${Math.round(t[s.k])}% (typical ±${Math.round(t[s.k + '_med'])}%)`)).join(''); });
   return S;
 }
 function hover(f, x, keys, html) {
@@ -124,19 +151,19 @@ function chartFan(id, dam, year, h = 320) {
 
 /* every year at once: forecast, 80% range and actual, for one forecast date */
 let allIssue = '15 Aug';
-function chartAllYears(id, dam, h = 230) {
-  const F = D.dams[dam].fans, yrs = Object.keys(F), el = document.getElementById(id), m = { t: 24, r: 12, b: 26, l: 44 }, f = frame(el, h, m);
+function chartAllYears(id, dam, h = 230, from = null) {
+  const F = D.dams[dam].fans, yrs = Object.keys(F).filter((y) => !from || +y >= from), el = document.getElementById(id), m = { t: 24, r: 12, b: 26, l: 44 }, f = frame(el, h, m);
   const k = F[yrs[0]].issues.findIndex((p) => p.issue === allIssue), col = DC[dam];
   const P = yrs.map((y) => ({ y, a: F[y].actual, ...F[y].issues[k] }));
   const x = d3.scaleBand().domain(yrs).range([0, f.iw]).padding(0.25);
   const y = d3.scaleLinear().domain([0, d3.max(P, (p) => Math.max(p.hi, p.a)) * 1.05]).nice().range([f.ih, 0]);
   yAxis(f, y, (v) => v, 4); yTitle(f, 'June–September inflow, TMC');
   f.g.append('g').attr('class', 'axis').attr('transform', `translate(0,${f.ih})`).call(d3.axisBottom(x).tickSizeOuter(0)
-    .tickValues(yrs.filter((v) => +v % 5 === 0)));
-  const bw = Math.max(3, Math.min(10, x.bandwidth() * 0.55)), cx = (p) => x(p.y) + x.bandwidth() / 2;
+    .tickValues(yrs.length <= 10 ? yrs : yrs.filter((v) => +v % 5 === 0)));
+  const bw = Math.max(3, Math.min(26, x.bandwidth() * 0.4)), cx = (p) => x(p.y) + x.bandwidth() / 2;
   const inside = (p) => p.a >= p.lo && p.a <= p.hi;
   f.g.selectAll(null).data(P).join('rect').attr('x', (p) => cx(p) - bw / 2).attr('width', bw).attr('y', (p) => y(p.hi)).attr('height', (p) => y(p.lo) - y(p.hi))
-    .attr('rx', bw / 2).attr('fill', col).attr('opacity', 0.3);
+    .attr('rx', Math.min(4, bw / 2)).attr('fill', col).attr('opacity', 0.3);
   f.g.selectAll(null).data(P).join('circle').attr('cx', cx).attr('cy', (p) => y(p.esp)).attr('r', Math.min(4.5, bw / 2 + 1)).attr('fill', col);
   f.g.selectAll(null).data(P).join('line').attr('x1', (p) => cx(p) - bw).attr('x2', (p) => cx(p) + bw).attr('y1', (p) => y(p.a)).attr('y2', (p) => y(p.a))
     .attr('stroke', (p) => inside(p) ? C.ink : C.orange).attr('stroke-width', 2.5);
@@ -148,13 +175,13 @@ function chartAllYears(id, dam, h = 230) {
   const e = P.map((p) => Math.abs(p.esp - p.a) / p.a * 100).sort((a, b) => a - b);
   return { n, total: P.length, med: e[Math.floor(e.length / 2)] };
 }
-function drawAllYears(prefix, h) {
-  const out = ['krs', 'hemavathy'].map((dam) => [dam, chartAllYears(`${prefix}-${dam}`, dam, h)]);
+function drawAllYears(prefix, h, from = null) {
+  const out = ['krs', 'hemavathy'].map((dam) => [dam, chartAllYears(`${prefix}-${dam}`, dam, h, from)]);
   out.forEach(([dam, r]) => { const el = document.getElementById(`${prefix}-${dam}-t`);
     if (el) el.innerHTML = `${D.dams[dam].short}: actual inside the likely range in <b>${r.n} of ${r.total}</b> years · typical error ±${Math.round(r.med)}%`; });
 }
-function setupAllYears(prefix, h) {
-  segButtons(`${prefix}-iss`, ['1 Jul', '1 Aug', '15 Aug', '1 Sep'].map((v) => [v, 'Forecast made ' + v]), allIssue, (v) => { allIssue = v; drawAllYears(prefix, typeof h === 'function' ? h() : h); });
+function setupAllYears(prefix, h, from = null) {
+  segButtons(`${prefix}-iss`, ['1 Jul', '1 Aug', '15 Aug', '1 Sep'].map((v) => [v, 'Forecast made ' + v]), allIssue, (v) => { allIssue = v; drawAllYears(prefix, typeof h === 'function' ? h() : h, from); });
 }
 
 /* dry-season warning by date, both dams */
@@ -443,6 +470,7 @@ html, body { height:100%; overflow:hidden; }
 def presentation(D):
     k, h = D["dams"]["krs"], D["dams"]["hemavathy"]
     at = lambda d, iss: next(t for t in d["timeline"] if t["issue"] == iss)
+    atr = lambda d, iss: next(t for t in d["timeline_recent"] if t["issue"] == iss)
     hz = hz_text(D)
     st = k["eda_stats"]
     tile = lambda kk, v, s: f'<div class="tile"><div class="k">{kk}</div><div class="v">{v}</div><div class="s">{s}</div></div>'
@@ -468,14 +496,14 @@ def presentation(D):
         ("stor", f"""<div class="kicker">Question 1 · How much water?</div><h2>Monsoon inflow decides how full the dams end September</h2>
 <p class="lede">Above {st['fill_threshold']} TMC of June–September inflow, KRS ends September at least 90% full in {st['fill_above']} years; below it, in {st['fill_below']}. Orange = driest third of years.</p>
 <div class="body"><div class="row2c"><div class="mini"><h3>KRS</h3><div class="chart" id="p-stor-k"></div></div><div class="mini"><h3>Hemavathy</h3><div class="chart" id="p-stor-h"></div></div></div></div>"""),
-        ("fan", f"""<div class="kicker">Question 1 · How much water?</div><h2>Forecast vs actual for all {len(k['fans'])} years, with a likely range</h2>
-<p class="lede">Rest of season replayed with every other year's rain. Dot = forecast, bar = 80% likely range, tick = what actually came (orange if outside the range).</p>
+        ("fan", f"""<div class="kicker">Question 1 · How much water?</div><h2>Our forecast vs what actually came, last 5 years (2021–2025)</h2>
+<p class="lede">Our model, not a baseline: the rest of the season is replayed with every other year's rain, and each year is forecast by a model that never saw it. Dot = forecast, bar = 80% likely range, tick = actual (orange if outside the range).</p>
 <div class="body"><div class="seg" id="pall-iss"></div>
 <div class="legend"><span><i class="area" style="background:rgba(42,120,214,.3)"></i>80% likely range</span><span><i class="dot" style="background:#2a78d6"></i>Forecast (KRS)</span><span><i class="dot" style="background:#1baf7a"></i>Forecast (Hemavathy)</span><span><i style="background:#15202b;height:3px"></i>Actual, inside the range</span><span><i style="background:#eb6834;height:3px"></i>Actual, outside</span></div>
 <h3 class="yrh" id="pall-krs-t"></h3><div class="chart" id="pall-krs"></div>
 <h3 class="yrh" id="pall-hemavathy-t"></h3><div class="chart" id="pall-hemavathy"></div></div>"""),
-        ("tl", f"""<div class="kicker">Question 2 · How early?</div><h2>Reasonably informed from {k['reliable']}; from {k['reliable_rain']} with a 30-day rain forecast</h2>
-<p class="lede">Error not exceeded in 4 years out of 5, by the date the forecast is made. Filled dots = within ±{GOOD}%. On {k['reliable']}: {nse_pair(at(k, k['reliable'])['esp_nse'], at(h, h['reliable'])['esp_nse'])} (KRS · Hemavathy); about 0 before July.</p>
+        ("tl", f"""<div class="kicker">Question 2 · How early?</div><h2>Last 5 years: reasonably informed from {k['rel_timeline_recent']}; from {k['relrain_timeline_recent']} with a 30-day rain forecast</h2>
+<p class="lede">Same years as the previous slide. Error not exceeded in 4 of the 5 years, by the date the forecast is made; filled dots = within ±{GOOD}%. On {k['rel_timeline_recent']}: {err(f"±{atr(k, k['rel_timeline_recent'])['esp']:.0f}% · ±{atr(h, k['rel_timeline_recent'])['esp']:.0f}%")} (KRS · Hemavathy), vs {err(f"±{atr(k, '15 Aug')['clim']:.0f}% · ±{atr(h, '15 Aug')['clim']:.0f}%")} for assuming an average year.</p>
 <div class="legend" id="p-tl-leg"></div><div class="body"><div class="row2c"><div class="mini"><h3>KRS</h3><div class="chart" id="p-tl-k"></div></div><div class="mini"><h3>Hemavathy</h3><div class="chart" id="p-tl-h"></div></div></div></div>"""),
         ("dry", f"""<div class="kicker">Question 2 · How early?</div><h2>A dry season can be called by mid-August</h2>
 <p class="lede">Share of the driest third of years flagged in advance, by forecast date. By 15 August: {at(k, '15 Aug')['dry_caught']} at KRS and {at(h, '15 Aug')['dry_caught']} at Hemavathy.</p>
@@ -504,8 +532,8 @@ const slides = [...document.querySelectorAll('.slide')]; let cur = 0;
 const H = () => Math.max(220, Math.min(460, window.innerHeight * 0.5));
 const draw = {
   stor: () => { chartStorage('p-stor-k', 'krs', H()); chartStorage('p-stor-h', 'hemavathy', H()); },
-  fan: () => drawAllYears('pall', H() * 0.5),
-  tl: () => { chartTimeline('p-tl-k', 'krs', H()); chartTimeline('p-tl-h', 'hemavathy', H());
+  fan: () => drawAllYears('pall', H() * 0.5, 2021),
+  tl: () => { chartTimeline('p-tl-k', 'krs', H(), 'timeline_recent'); chartTimeline('p-tl-h', 'hemavathy', H(), 'timeline_recent');
     legend(document.getElementById('p-tl-leg'), [{ n: 'Assume an average year', c: C.ink3, cls: 'dash' }, { n: 'Our forecast, KRS', c: DC.krs }, { n: 'Our forecast, Hemavathy', c: DC.hemavathy }, { n: '+ 30-day rain forecast', c: C.orange }]); },
   dry: () => legend(document.getElementById('p-dry-leg'), chartDry('p-dry', H())),
   n15: () => legend(document.getElementById('p-hz-leg'), chartHzAll('p-hz', H() * 0.8)),
@@ -523,7 +551,7 @@ function show(i) {
 document.addEventListener('keydown', (e) => { if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); show(cur + 1); }
   if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); show(cur - 1); } });
 document.getElementById('next').onclick = () => show(cur + 1); document.getElementById('prev').onclick = () => show(cur - 1);
-setupAllYears('pall', () => H() * 0.5);
+setupAllYears('pall', () => H() * 0.5, 2021);
 show((parseInt(location.hash.slice(1)) || 1) - 1);
 let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => show(cur), 150); });
 """
