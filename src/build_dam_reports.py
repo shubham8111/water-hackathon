@@ -145,6 +145,8 @@ def dam_data(dam, R, inflow, fixes, CR, df, SOIL, EV):
         traj[y] = {"actual": t["actual"], "rain": t["rain"], "pts": sorted(pts, key=lambda r: r["dos"])}
     d["events"] = {"summary": se["summary"], "by_month": se["by_month"], "traj": traj,
                    "default": max(traj, key=lambda y: traj[y]["actual"])}
+    if dam == "hemavathy":
+        d["paper"] = EV["paper"]
     n15 = EV[dam]["next15"]
     d["next15"] = {"models": n15["models"], "series": n15["series"], "n_heavy": n15["n_heavy_test_days"],
                    "mean_volume": n15["mean_volume_tmc"]}
@@ -733,6 +735,70 @@ function segN15() {
     el.appendChild(b); });
 }
 
+/* ---- comparison with the published Hemavathi study (Hemavathy report only) ----------- */
+const PROWS = [
+  { k: null, n: 'Paper, as reported (neural network)' },
+  { k: 'Paper method: network on flows from the formula', n: 'Paper method on our data: network on formula flows' },
+  { k: 'Paper method: network on measured flows (1-2 days before)', n: 'Paper method on our data: network on measured flows' },
+  { k: 'Same as yesterday', n: '“Same as yesterday”' },
+  { k: 'Our model: rain + soil (no inflow readings)', n: 'Our model: rain + soil (no inflow readings)' },
+  { k: "Our model: + last week's inflow", n: 'Our model + last week’s inflow' }];
+let paperMetric = 'NSE', paperProto = 'ours';
+function chartPaperScores() {
+  const P = D.paper, el = document.getElementById('c-pscores'), m = { t: 30, r: 40, b: 30, l: Math.min(330, el.clientWidth * 0.5) };
+  const f = frame(el, PROWS.length * 40 + 40, m);
+  const y = d3.scaleBand().domain(PROWS.map((r) => r.n)).range([0, f.ih]).padding(0.4);
+  const val = (r, pr) => r.k === null ? (pr === 'paper' ? P.paper_reported.nn[paperMetric] : null) : P.protocols[pr].models[r.k][paperMetric];
+  const lo = Math.min(0, d3.min(PROWS.flatMap((r) => ['paper', 'ours'].map((pr) => val(r, pr)).filter((v) => v != null))));
+  const x = d3.scaleLinear().domain([Math.floor(lo * 10) / 10, 1]).range([0, f.iw]);
+  f.g.append('g').attr('class', 'grid').attr('transform', `translate(0,${f.ih})`).call(d3.axisBottom(x).ticks(5).tickSize(-f.ih).tickFormat(''));
+  f.g.append('g').attr('class', 'axis').attr('transform', `translate(0,${f.ih})`).call(d3.axisBottom(x).ticks(5).tickFormat(d3.format('.1f')).tickSizeOuter(0));
+  f.g.append('text').attr('class', 'lbl2').attr('x', 0).attr('y', -14).text(`${paperMetric} (1 = perfect)`);
+  const ref = P.paper_reported.nn[paperMetric];
+  f.g.append('line').attr('x1', x(ref)).attr('x2', x(ref)).attr('y1', -6).attr('y2', f.ih).attr('stroke', C.ink3).attr('stroke-dasharray', '4 4');
+  PROWS.forEach((r) => {
+    const cy = y(r.n) + y.bandwidth() / 2, a = val(r, 'paper'), b = val(r, 'ours');
+    f.g.append('text').attr('class', r.k && r.k.startsWith('Our') ? 'lbl' : 'lbl2').attr('x', -12).attr('y', cy + 4).attr('text-anchor', 'end').text(r.n);
+    if (a != null && b != null) f.g.append('line').attr('x1', x(a)).attr('x2', x(b)).attr('y1', cy).attr('y2', cy).attr('stroke', '#c3ccd5').attr('stroke-width', 3);
+    [['paper', a, C.orange, 'Random test days (paper’s test)'], ['ours', b, C.blue, 'Unseen years 2020–2023 (our test)']].forEach(([pr, v, c, lab]) => {
+      if (v == null) return;
+      f.g.append('circle').attr('cx', x(v)).attr('cy', cy).attr('r', 7).attr('fill', c).attr('stroke', '#fff').attr('stroke-width', 2)
+        .on('mousemove', (ev) => { const M = r.k ? P.protocols[pr].models[r.k] : P.paper_reported.nn;
+          showTip(ev, `<b>${r.n}</b><div class="lbl2">${r.k ? lab : 'reported in the paper (random split)'}</div>` + ['NSE', 'KGE', 'R2'].map((k) => row(c, k === 'R2' ? 'R²' : k, M[k].toFixed(2))).join('')
+            + (M.bias_pct != null ? row(c, 'Average bias', (M.bias_pct > 0 ? '+' : '') + M.bias_pct.toFixed(0) + '%') : '')); })
+        .on('mouseleave', hideTip);
+    });
+  });
+  f.g.append('text').attr('class', 'lbl2').attr('x', x(ref) + 4).attr('y', -2).text('paper');
+}
+function segPaper() {
+  const el = document.getElementById('seg-pmetric');
+  ['NSE', 'KGE', 'R2'].forEach((k) => { const b = document.createElement('button'); b.textContent = k === 'R2' ? 'R²' : k; b.setAttribute('aria-pressed', k === paperMetric);
+    b.onclick = () => { paperMetric = k; el.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b)); chartPaperScores(); }; el.appendChild(b); });
+  const el2 = document.getElementById('seg-pproto');
+  [['ours', 'Unseen years 2020–2023'], ['paper', 'Random test days (paper’s test)']].forEach(([k, n]) => { const b = document.createElement('button'); b.textContent = n; b.setAttribute('aria-pressed', k === paperProto);
+    b.onclick = () => { paperProto = k; el2.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b)); chartPaperMonths(); }; el2.appendChild(b); });
+}
+function chartPaperMonths() {
+  const P = D.paper, Pr = P.protocols[paperProto], months = ['Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov'];
+  const S = [{ n: 'Paper, as reported (best formula: polynomial)', c: C.ink3, dash: true, v: P.paper_reported.formulas_nse.Polynomial },
+    { n: 'Paper’s polynomial formula on our data', c: C.orange, v: Pr.formulas.Polynomial },
+    { n: 'Our model: rain + soil', c: C.blue, v: months.map((mm) => Pr.models['Our model: rain + soil (no inflow readings)'].by_month[mm]) },
+    { n: 'Our model + last week’s inflow', c: C.green, v: months.map((mm) => Pr.models["Our model: + last week's inflow"].by_month[mm]) }];
+  const el = document.getElementById('c-pmonths'), m = { t: 28, r: 16, b: 30, l: 44 }, f = frame(el, 300, m);
+  const x = d3.scalePoint().domain(months).range([0, f.iw]).padding(0.3);
+  const lo = Math.min(0, d3.min(S.flatMap((s) => s.v)));
+  const y = d3.scaleLinear().domain([Math.floor(lo * 5) / 5, 1]).range([f.ih, 0]);
+  yAxis(f, y, d3.format('.1f')); yTitle(f, 'NSE by month (1 = perfect)');
+  f.g.append('g').attr('class', 'axis').attr('transform', `translate(0,${f.ih})`).call(d3.axisBottom(x).tickSizeOuter(0));
+  if (lo < 0) f.g.append('line').attr('x1', 0).attr('x2', f.iw).attr('y1', y(0)).attr('y2', y(0)).attr('stroke', C.ink3);
+  S.forEach((s) => { const pts = months.map((mm, i) => ({ mm, v: s.v[i] }));
+    f.g.append('path').datum(pts).attr('fill', 'none').attr('stroke', s.c).attr('stroke-width', 2.5).attr('stroke-dasharray', s.dash ? '6 4' : null).attr('d', d3.line().x((p) => x(p.mm)).y((p) => y(p.v)));
+    f.g.selectAll(null).data(pts).join('circle').attr('cx', (p) => x(p.mm)).attr('cy', (p) => y(p.v)).attr('r', 4).attr('fill', s.c).attr('stroke', '#fff').attr('stroke-width', 2); });
+  legend(document.getElementById('l-pmonths'), S.map((s) => ({ n: s.n, c: s.c, cls: s.dash ? 'dash' : '' })));
+  crosshair(f, x, months, (mm) => `<b>${mm}</b>` + S.map((s) => row(s.c, s.n, s.v[months.indexOf(mm)].toFixed(2))).join(''), (mm) => mm);
+}
+
 function drawAll() {
   chartForecast(); chartStack(); chartRelations(); chartScatter();
   const R = D.lag_rain, bands = [{ k: 'far', n: 'Far (Ghats)', c: C.blue }, { k: 'mid', n: 'Middle', c: C.orange }, { k: 'near', n: 'Near dam', c: C.green }];
@@ -752,8 +818,9 @@ function drawAll() {
     (v) => `${v}%`, C.blue, 100);
   if (D.vs_krs) chartVsKrs();
   chartLadder(); chartMatrix(); chartSoil(); chartEvents(); chartN15Bars(); chartN15();
+  if (D.paper) { chartPaperScores(); chartPaperMonths(); }
 }
-segIssue(); segYear(); selEvents(); segN15(); drawAll();
+segIssue(); segYear(); selEvents(); segN15(); if (D.paper) segPaper(); drawAll();
 let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawAll, 150); });
 """
 
@@ -867,6 +934,44 @@ def page(d):
                 f"(typical June error ±{jun(n15):.0f}% even with the rain forecast). "
                 "The rain forecast here is the rain that actually fell, so these numbers are the best a real forecast could reach. "
                 + ("Future releases from Harangi and Hemavathy are not known in advance, so the model only sees today's releases." if d["dam"] == "krs" else ""))
+    paper_html = ""
+    if d.get("paper"):
+        PP = d["paper"]
+        pm = lambda pr, k: PP["protocols"][pr]["models"][k]
+        oa, orr = pm("paper", "Our model: + last week's inflow"), pm("paper", "Our model: rain + soil (no inflow readings)")
+        ua, ur = pm("ours", "Our model: + last week's inflow"), pm("ours", "Our model: rain + soil (no inflow readings)")
+        rep_ = PP["paper_reported"]["nn"]
+        pf, pq = pm("paper", "Paper method: network on flows from the formula"), pm("paper", "Paper method: network on measured flows (1-2 days before)")
+        uf, uq = pm("ours", "Paper method: network on flows from the formula"), pm("ours", "Paper method: network on measured flows (1-2 days before)")
+        py, uy = pm("paper", "Same as yesterday"), pm("ours", "Same as yesterday")
+        mo = ["Jun", "Jul", "Aug", "Sep", "Oct", "Nov"]
+        best_paper = PP["paper_reported"]["formulas_nse"]["Polynomial"]
+        win = lambda r: sum(r["by_month"][m] > b for m, b in zip(mo, best_paper))
+        month_title = (f"On unseen years, our model beats the paper's best monthly formula in {win(ua)} of 6 months with last week's inflow, "
+                       f"and in {win(ur)} of 6 from rain alone; October and November are hardest for every approach")
+        paper_tiles = "".join(f'<div class="tile"><div class="k">{k}</div><div class="v">{v}</div><div class="s">{t}</div></div>' for k, v, t in [
+            ("Paper's test, our model", f"{orr['NSE']:.2f}", f"NSE from rain and soil alone (KGE {orr['KGE']:.2f}) vs {rep_['NSE']:.2f} reported by the paper"),
+            ("Paper's method on our data", f"{pf['NSE']:.2f}–{pq['NSE']:.2f}", f"NSE on its own test; {uf['NSE']:.2f}–{uq['NSE']:.2f} on unseen years"),
+            ("“Same as yesterday”", f"{py['NSE']:.2f}", f"NSE on the paper's test (KGE {py['KGE']:.2f}) with no model at all; the paper reports {rep_['NSE']:.2f} / {rep_['KGE']:.2f}")])
+        paper_html = f"""
+<h2 class="sec">Compared with a published study</h2>
+<div class="card"><h2>Scored the paper's way, our model beats the published Hemavathi model: NSE {orr['NSE']:.2f}–{oa['NSE']:.2f} vs {rep_['NSE']:.2f}</h2>
+<p class="sub">C. Chandre Gowda (2025), <i>Inflow prediction and modelling for a seasonal flow reservoir</i>, Water-Energy Nexus 8, 281–286, models daily inflow to the same reservoir. We rebuilt its method on our data and scored every approach two ways:
+<b style="color:#eb6834">random test days</b>, as in the paper (70% / 15% / 15% of June–November days, so the days either side of each test day are in training), and
+<b style="color:#2a78d6">unseen years</b>, as in the rest of this report (trained on 1991–2019, tested on all of June–November 2020–2023). Dashed line = the paper's reported score. Hover a dot for all scores.</p>
+<div class="seg" id="seg-pmetric"></div>
+<div class="legend"><span><i class="dot" style="background:#eb6834"></i>Random test days (paper’s test)</span><span><i class="dot" style="background:#2a78d6"></i>Unseen years 2020–2023 (our test)</span><span><i class="dash" style="background:#15202b"></i>Paper’s reported score</span></div>
+<div class="chart" id="c-pscores"></div>
+<div class="tiles" style="margin-top:14px">{paper_tiles}</div>
+<p class="sub" style="margin-top:12px"><b>What this shows:</b> on random test days every model looks better, because the days just before and after each test day, from the same storms, are in its training data; “same as yesterday” alone scores NSE {py['NSE']:.2f}. On unseen years, the paper's network on formula flows drops to {uf['NSE']:.2f}, while our model holds {ua['NSE']:.2f} with last week's inflow.
+<b>Where we fall short:</b> without any inflow readings, our model over-predicts unseen years by {ur['bias_pct']:.0f}% on average, which pulls its KGE down to {ur['KGE']:.2f}; that is the next thing to fix.</p></div>
+
+<div class="card"><h2>{month_title}</h2>
+<p class="sub">NSE for each month, June–November. The paper fits one formula per month from rain on the day and the 2 days before (its 2-day lag comes from a 12-hour time of concentration). Pick how the test days are chosen.</p>
+<div class="seg" id="seg-pproto"></div>
+<div class="legend" id="l-pmonths"></div><div class="chart" id="c-pmonths"></div>
+<p class="sub" style="margin-top:12px"><b>How we rebuilt it:</b> catchment rain is our IMD grid weighted by area (the paper uses Thiessen weights for 4 rain gauges). The four formulas (linear, polynomial, logarithmic, exponential) are fitted per month on rain lags 0–2. The network has 2 inputs, 14 tanh hidden neurons and a linear output, best of 5 random starts on the validation days. The paper does not list the network's two inputs exactly, so we tried both readings: the formula's flows for today and yesterday, and measured inflow 1 and 2 days before.
+<b>Not comparable:</b> the paper's RMSE (1.48 m³/s) and MAE (0.94 m³/s) are far below its own monthly tables (50–770 m³/s), so they were probably computed on rescaled data; it gives the catchment as 5,410 km², which looks like the whole Hemavathi basin, while {d['area_km2']:,} km² drains to the dam.</p></div>"""
     L = d["ladder"]
     fin, clim = next(r for r in L if r["final"]), L[0]
     ladder_title = (f"From NSE {clim['nse']:.2f} (seasonal average) to {fin['nse']:.2f}: "
@@ -1020,6 +1125,8 @@ def page(d):
 <p class="sub">Monsoon-total forecast error not exceeded in 4 of 5 years, for each approach (rows) and forecast date (columns). ✓ / bold = within ±{GOOD}%, i.e. reasonably informed. Rain-forecast rows use actual rainfall as a perfect forecast. Hover for the typical error.</p>
 <div class="chart" id="c-matrix"></div></div>
 
+{paper_html}
+
 <h2 class="sec">How it works</h2>
 <div class="card"><h2>From raw data to forecast</h2>
 <p class="sub">The same steps run for both dams. Colours: grey = data, blue = preparing inputs, orange = models, green = results.</p>
@@ -1033,7 +1140,7 @@ def page(d):
 <pre>cd src
 ../.venv/bin/python prepare.py && ../.venv/bin/python inflow_model.py && ../.venv/bin/python peak_analysis.py
 ../.venv/bin/python dam_analysis.py && ../.venv/bin/python cell_response.py && ../.venv/bin/python soil_test.py
-../.venv/bin/python event_forecast.py
+../.venv/bin/python event_forecast.py && ../.venv/bin/python paper_compare.py
 ../.venv/bin/python build_dam_reports.py</pre></details>
 <p class="foot">WELL Labs Water Data Hackathon · Theme 2 / Question 3 · generated by src/build_dam_reports.py</p>
 </div>"""
@@ -1055,6 +1162,7 @@ def main():
     CR = json.loads((OUT / "cell_response.json").read_text())
     SOIL = json.loads((OUT / "soil_results.json").read_text())
     EV = json.loads((OUT / "event_results.json").read_text())
+    EV["paper"] = json.loads((OUT / "paper_compare.json").read_text())  # Hemavathy only
     df = pd.read_parquet(ROOT / "data" / "processed" / "daily.parquet")
     for dam, meta in DAMS.items():
         html = page(dam_data(dam, R, inflow, fixes, CR, df, SOIL, EV))

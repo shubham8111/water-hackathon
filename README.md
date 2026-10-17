@@ -20,6 +20,7 @@ Each report covers:
 4. **How the catchment responds.** How much inflow rain produces and after what delay, as a map of each grid cell's multiplier and delay, plus the daily model against observations.
 5. **Flood warning.** How many days ahead high flows can be predicted.
 6. **Supporting detail.** Data fixes and the method.
+7. **Compared with a published study (Hemavathy report only).** Our model vs Chandre Gowda (2025), scored both the paper's way and ours.
 
 ## Key results
 
@@ -60,6 +61,19 @@ Results are on data the models never saw. The monsoon total is scored by leaving
 - A rain forecast is what makes the 15-day outlook work; today's state alone is only a little better than assuming an average year.
 - June is hardest (typical error about ±40% even with the rain forecast), because the dry catchment's response to rain varies a lot.
 
+**Compared with a published Hemavathi model.** C. Chandre Gowda (2025), *Inflow prediction and modelling for a seasonal flow reservoir*, Water-Energy Nexus 8, 281–286, reports daily NSE 0.89 / KGE 0.93 for a neural network on lagged flows, tested on random days. We rebuilt its method on our data and scored everything two ways:
+
+| June–November daily inflow (NSE) | Random test days (paper's test) | Unseen years 2020–2023 (our test) |
+|---|---|---|
+| Paper, as reported | 0.89 | — |
+| Paper's method on our data (network on formula flows / on measured flows) | 0.72 / 0.83 | 0.34 / 0.85 |
+| "Same as yesterday" | 0.82 | 0.84 |
+| Our model, rain + soil only | **0.91** | 0.77 |
+| Our model + last week's inflow | **0.92** | **0.90** |
+
+- Random test days flatter every model, because the days around each test day are in training. On unseen years our model with last week's inflow stays at 0.90.
+- Weak spot it exposes: without inflow readings our model over-predicts unseen years by about 29%, so its KGE is only 0.60.
+
 **Year by year**
 - **Dry years compound:** KRS gets 20% less rain, 55% less inflow, and ends September 64% full instead of 94%.
 - **KRS ends September at least 90% full in 19 of 21 years with more than 86 TMC of monsoon inflow.** Below that it does so in only 3 of 14 years.
@@ -84,6 +98,7 @@ src/
   soil.py               # TerraClimate monthly soil data -> daily model inputs
   soil_test.py          # with vs without soil data, daily model and monsoon total
   event_forecast.py     # monsoon total re-issued on heavy-rain days; next-15-day inflow
+  paper_compare.py      # Hemavathy: the published model's method rebuilt on our data, both test setups
   build_dam_reports.py  # builds outputs/KRS_insights.html and outputs/Hemavathy_insights.html
   peak_analysis.py      # KRS peak events (thresholds used by the analyses)
   season_forecast.py, one_shot.py, lead_time.py   # earlier KRS-only analyses (30-Sep storage)
@@ -122,6 +137,7 @@ cd src
 ../.venv/bin/python cell_response.py      # -> outputs/cell_response.json
 ../.venv/bin/python soil_test.py          # -> outputs/soil_results.json
 ../.venv/bin/python event_forecast.py     # -> outputs/event_results.json
+../.venv/bin/python paper_compare.py      # -> outputs/paper_compare.json
 ../.venv/bin/python build_dam_reports.py  # -> outputs/KRS_insights.html, outputs/Hemavathy_insights.html
 ```
 
