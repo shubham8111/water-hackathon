@@ -7,7 +7,7 @@
    fitted on the other years' days within +-7 days of it (leave-one-year-out). On the regular dates
    this matches the per-date models of dam_analysis.py. Each heavy-rain update is compared with the
    last scheduled forecast, and with an update made on an ordinary day after the same wait.
-2. Next 15 days: total inflow (TMC) over the 15 days after the issue day, from today's state
+2. Next 1, 7 and 15 days: total inflow (TMC) over the 15 days after the issue day, from today's state
    (recent inflow and rain, soil wetness, soil moisture, storage, upstream releases for KRS) with and
    without a rain forecast (actual rain of those days, a perfect forecast). Gradient boosting,
    fit on 1991-2019, tested on 2020-2023 issue days in June-September.
@@ -215,6 +215,43 @@ def next15(df, rain, dam, upstream, soil, events):
             "mean_volume_tmc": round(float(a.mean()), 2)}
 
 
+HORIZONS = [1, 7, 15]
+
+
+def horizons(df, rain, dam, upstream, soil):
+    """Inflow volume over the next 1, 7 and 15 days: average year, today's state only, and today's
+    state + a (perfect) rain forecast for the same days. Same inputs, fit and test years as next15."""
+    X = next15_frame(df, rain, dam, upstream, soil)[0]
+    qf = df[f"{dam}_inflow"].interpolate(limit=5)
+    nxt = lambda s, a, b: sum(s.shift(-k) for k in range(a, b + 1))
+    yrs, mon, doy = df.index.year, df.index.month.isin([6, 7, 8, 9]), df.index.dayofyear
+    out = {}
+    for h in HORIZONS:
+        fut = nxt(qf, 1, h)
+        cuts = [(1, 1)] if h == 1 else [(1, 3), (4, 7)] if h == 7 else [(1, 5), (6, 10), (11, 15)]
+        F = pd.DataFrame({f"rain_next_{a}_{b}": nxt(rain["basin"], a, b) for a, b in cuts})
+        for b in ["near", "mid", "far"]:
+            F[f"rain_{b}_next{h}"] = nxt(rain[b], 1, h)
+        vol = to_tmc(fut)
+        ok = mon & X.notna().all(axis=1) & F.notna().all(axis=1) & vol.notna() & (vol > 0)
+        tr, te = ok & (yrs <= 2019), ok & (yrs >= 2020) & (yrs <= TEST_END)
+        y = np.log1p(fut)
+        clim = fut[tr].groupby(doy[tr]).mean().rolling(15, center=True, min_periods=1).mean()
+        preds = {"Average year": to_tmc(pd.Series(doy.map(clim).values, index=df.index)[te])}
+        for name, Xv in [("Today's state only", X), ("+ rain forecast for those days", X.join(F))]:
+            m = gbm().fit(Xv[tr], y[tr])
+            smear = np.mean(np.exp(y[tr] - m.predict(Xv[tr])))
+            preds[name] = pd.Series(to_tmc(np.expm1(m.predict(Xv[te])) * smear), index=df.index[te])
+        a = vol[te]
+        out[h] = {"mean_volume_tmc": round(float(a.mean()), 2), "models": {}}
+        for name, p in preds.items():
+            e = pct_err(p, a)
+            out[h]["models"][name] = {"median_pct": round(float(e.median()), 1), "p80_pct": round(float(e.quantile(.8)), 1),
+                                      "within_25": round(float((e <= 25).mean()), 2), "NSE": metrics(a, p)["NSE"]}
+            print(" ", dam, f"next {h} days", name, out[h]["models"][name])
+    return out
+
+
 def main():
     df = pd.read_parquet(DATA / "processed" / "daily.parquet")
     cell_ids = [c for c in df.columns if c.startswith("g_")]
@@ -231,7 +268,7 @@ def main():
         soil = soil_daily(load_terraclimate(DATA / SOIL_ZIP[dam])[0], df.index)
         se = season_events(df, rain["basin"], dam, up)
         ev, _ = heavy_days(rain["basin"])
-        R[dam] = {"season": se, "next15": next15(df, rain, dam, up, soil, ev.t)}
+        R[dam] = {"season": se, "next15": next15(df, rain, dam, up, soil, ev.t), "horizons": horizons(df, rain, dam, up, soil)}
     R["test_years"] = [2020, TEST_END]
     (OUT / "event_results.json").write_text(json.dumps(R, default=float))
 

@@ -43,6 +43,7 @@ def collect():
             "fans": ESP[dam]["years"], "eda": [{k: r[k] for k in ["year", "rain", "inflow", "pct_sep30", "dry"]} for r in rows],
             "eda_stats": st, "mean_total": R["monsoon_inflow"][dam]["mean_total_tmc"],
             "n15": {k: {x: n15[k][x] for x in ["median_pct", "p80_pct", "NSE", "within_25"]} for k in n15},
+            "hz": EV[dam]["horizons"],
             "daily_nse": (R["daily"]["krs|Rain + upstream releases"] if dam == "krs" else R["daily"]["hemavathy|Rain only"])["all"]["NSE"],
             "daily_nse_ar": (R["daily"]["krs|Rain + upstream + past inflow"] if dam == "krs" else R["daily"]["hemavathy|Rain + past inflow"])["all"]["NSE"],
             "soil": [so["Without soil data"]["NSE"], so["With soil data"]["NSE"]],
@@ -165,6 +166,26 @@ function chartN15(id, h = 250) {
   return [{ n: 'KRS', c: DC.krs, cls: 'area' }, { n: 'Hemavathy', c: DC.hemavathy, cls: 'area' }];
 }
 
+/* next day / 7 days / 15 days, both dams */
+const HZ = [['1', 'Next day'], ['7', 'Next 7 days'], ['15', 'Next 15 days']];
+const HZROWS = [['Average year', 'Average year'], ["Today's state only", "Today's data only"], ['+ rain forecast for those days', '+ rain forecast']];
+function chartHz(id, hz, h = 210) {
+  const el = document.getElementById(id), m = { t: 8, r: 46, b: 8, l: Math.min(120, el.clientWidth * 0.36) }, f = frame(el, h, m);
+  const y0 = d3.scaleBand().domain(HZROWS.map((r) => r[1])).range([0, f.ih]).padding(0.22);
+  const y1 = d3.scaleBand().domain(['krs', 'hemavathy']).range([0, y0.bandwidth()]).padding(0.12);
+  const x = d3.scaleLinear().domain([0, 82]).range([0, f.iw]).clamp(true);
+  HZROWS.forEach(([k, lab]) => {
+    f.g.append('text').attr('class', 'lbl2').attr('x', -8).attr('y', y0(lab) + y0.bandwidth() / 2 + 4).attr('text-anchor', 'end').text(lab);
+    ['krs', 'hemavathy'].forEach((dam) => { const H = D.dams[dam].hz[hz], v = H.models[k];
+      f.g.append('rect').attr('x', 0).attr('y', y0(lab) + y1(dam)).attr('height', y1.bandwidth()).attr('width', x(v.median_pct)).attr('rx', 3).attr('fill', DC[dam])
+        .on('mousemove', (ev) => showTip(ev, `<b>${D.dams[dam].short} · ${HZ.find((z) => z[0] === hz)[1].toLowerCase()} · ${lab}</b>` + row(DC[dam], 'Typical error', `±${Math.round(v.median_pct)}%`)
+          + row(DC[dam], '4 days in 5 within', `±${Math.round(v.p80_pct)}%`) + row(DC[dam], 'NSE', v.NSE.toFixed(2)) + row(DC[dam], 'Average volume', `${H.mean_volume_tmc} TMC`))).on('mouseleave', hideTip);
+      f.g.append('text').attr('class', 'lbl').attr('x', x(v.median_pct) + 5).attr('y', y0(lab) + y1(dam) + y1.bandwidth() / 2 + 4).text(`±${Math.round(v.median_pct)}%`); });
+  });
+}
+function chartHzAll(prefix, h) { HZ.forEach(([k]) => chartHz(`${prefix}-${k}`, k, h));
+  return [{ n: 'KRS', c: DC.krs, cls: 'area' }, { n: 'Hemavathy', c: DC.hemavathy, cls: 'area' }]; }
+
 /* what each step added to daily accuracy */
 function chartLadderMini(id, dam, h) {
   const L = D.dams[dam].ladder, el = document.getElementById(id), m = { t: 4, r: 44, b: 6, l: Math.min(240, el.clientWidth * 0.55) };
@@ -221,16 +242,31 @@ FINAL_CSS = """
 """
 
 
+def hz_text(D):
+    """Short answers for the next day / 7 days / 15 days (typical error, KRS · Hemavathy)."""
+    g = lambda dam, h, m: D["dams"][dam]["hz"][str(h)]["models"][m]["median_pct"]
+    st, rf = "Today's state only", "+ rain forecast for those days"
+    pair = lambda h, m: f"±{g('krs', h, m):.0f}% · ±{g('hemavathy', h, m):.0f}%"
+    return {"day": pair(1, st), "d7": pair(7, rf), "d15": pair(15, rf), "d7_none": pair(7, st), "d15_none": pair(15, st)}
+
+
+HZ_HTML = """<div class="row3">
+<div class="mini"><h3>Next day</h3><div class="chart" id="{p}-1"></div></div>
+<div class="mini"><h3>Next 7 days</h3><div class="chart" id="{p}-7"></div></div>
+<div class="mini"><h3>Next 15 days</h3><div class="chart" id="{p}-15"></div></div></div>"""
+
+
 def final_page(D):
     k, h = D["dams"]["krs"], D["dams"]["hemavathy"]
     at = lambda d, iss: next(t for t in d["timeline"] if t["issue"] == iss)
     tile = lambda kk, v, s: f'<div class="tile"><div class="k">{kk}</div><div class="v">{v}</div><div class="s">{s}</div></div>'
     dryk, dryh = at(k, "15 Aug")["dry_caught"], at(h, "15 Aug")["dry_caught"]
     n15k, n15h = k["n15"]["+ next 15 days of rain"], h["n15"]["+ next 15 days of rain"]
+    hz = hz_text(D)
     tiles = "".join([
         tile("Reliable monsoon-total estimate", k["reliable"], f"4 years in 5 within ±{GOOD}% at both dams · {k['reliable_rain']} with a 30-day rain forecast"),
         tile("Dry season flagged by 15 Aug", f"{dryk} · {dryh}", "dry years caught at KRS · Hemavathy"),
-        tile("Next 15 days of inflow", f"±{n15k['median_pct']:.0f}% · ±{n15h['median_pct']:.0f}%", "typical error with a 15-day rain forecast, KRS · Hemavathy"),
+        tile("Water arriving tomorrow", hz["day"], f"typical error, KRS · Hemavathy, from today's data · 7 days {hz['d7']}, 15 days {hz['d15']} with a rain forecast"),
         tile("Daily inflow accuracy (NSE)", f"{k['daily_nse']:.2f} · {h['daily_nse']:.2f}", "on unseen years 2020–2023; 1 = perfect")])
     ka, ha = at(k, "1 Aug"), at(h, "1 Aug")
     st = k["eda_stats"]
@@ -266,11 +302,11 @@ def final_page(D):
 <p class="sub">Dry season = the driest third of years. Flagged when at least half of the replays end below that line. Hover for false alarms.</p>
 <div class="legend" id="f-dry-leg"></div><div class="chart" id="f-dry"></div></div>
 
-<h2 class="sec">Question 3 · What reaches the dam in the next 15 days?</h2>
+<h2 class="sec">Question 3 · How much water will reach the dam in the next day, 7 days and 15 days?</h2>
 <div class="card"><span class="q">ANSWER</span>
-<p class="answer">With a 15-day rain forecast: typical error ±{n15k['median_pct']:.0f}% at KRS and ±{n15h['median_pct']:.0f}% at Hemavathy (NSE {n15k['NSE']:.2f} · {n15h['NSE']:.2f}). Today's data alone is not enough.</p>
-<p class="sub">Total inflow over the 15 days after each forecast day, June–September 2020–2023. The rain forecast is the rain that actually fell, so these are best-case numbers. Shorter bars are better.</p>
-<div class="legend" id="f-n15-leg"></div><div class="chart" id="f-n15"></div></div>
+<p class="answer">Next day: {hz['day']} from today's data alone. Next 7 days: {hz['d7']}, and next 15 days: {hz['d15']}, with a rain forecast for those days.</p>
+<p class="sub">Typical error, KRS · Hemavathy. Total inflow over the period after each forecast day, June–September of 2020–2023, never seen in training. Tomorrow's inflow is mostly water already on its way, so today's data is enough; beyond a few days the coming rain decides it (without a rain forecast: {hz['d7_none']} for 7 days, {hz['d15_none']} for 15 days). The rain forecast is the rain that actually fell, so those are best-case numbers. Shorter bars are better; hover for NSE and volumes.</p>
+<div class="legend" id="f-hz-leg"></div>{HZ_HTML.format(p="f-hz")}</div>
 
 <h2 class="sec">How we got there</h2>
 <div class="card"><h2>Each step that improved daily accuracy</h2>
@@ -294,7 +330,7 @@ function drawAll() {
   const S = chartTimeline('f-tl-k', 'krs'); chartTimeline('f-tl-h', 'hemavathy');
   legend(document.getElementById('f-tl-leg'), [{ n: 'Assume an average year', c: C.ink3, cls: 'dash' }, { n: 'Our forecast, KRS', c: DC.krs }, { n: 'Our forecast, Hemavathy', c: DC.hemavathy }, { n: '+ 30-day rain forecast', c: C.orange }, { n: `±${D.GOOD}% band`, c: 'rgba(29,122,67,.25)', cls: 'area' }]);
   legend(document.getElementById('f-dry-leg'), chartDry('f-dry'));
-  legend(document.getElementById('f-n15-leg'), chartN15('f-n15'));
+  legend(document.getElementById('f-hz-leg'), chartHzAll('f-hz'));
   chartLadderMini('f-lad-k', 'krs'); chartLadderMini('f-lad-h', 'hemavathy');
   legend(document.getElementById('f-pap-leg'), chartPaper('f-pap'));
 }
@@ -317,6 +353,7 @@ html, body { height:100%; overflow:hidden; }
 .slide .tile .v { font-size:clamp(1.5rem,2.6vw,2.4rem); }
 .big3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
 .big3 .tile .v { font-size:clamp(1.3rem,2.2vw,2rem); }
+.hzt { width:auto; margin:6px 0 4px; font-size:clamp(1.05rem,1.6vw,1.45rem); } .hzt td { border:0; padding:2px 16px 2px 0; } .hzt td + td { font-weight:650; font-variant-numeric:tabular-nums; }
 .slide .tile .s { font-size:clamp(.9rem,1.2vw,1.1rem); line-height:1.45; } .slide .tile { padding:22px 24px; }
 .flowline { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
 .flowline .node { font-size:.95rem; }
@@ -331,7 +368,7 @@ html, body { height:100%; overflow:hidden; }
 def presentation(D):
     k, h = D["dams"]["krs"], D["dams"]["hemavathy"]
     at = lambda d, iss: next(t for t in d["timeline"] if t["issue"] == iss)
-    n15k, n15h = k["n15"]["+ next 15 days of rain"], h["n15"]["+ next 15 days of rain"]
+    hz = hz_text(D)
     st = k["eda_stats"]
     tile = lambda kk, v, s: f'<div class="tile"><div class="k">{kk}</div><div class="v">{v}</div><div class="s">{s}</div></div>'
     node = lambda cls, t, b: f'<div class="node {cls}"><b>{t}</b>{b}</div>'
@@ -343,7 +380,9 @@ def presentation(D):
         ("", f"""<div class="kicker">The answers</div><h2>Three questions, three answers</h2><div class="body"><div class="big3">
 {tile("1 · How much water?", "Inflow decides storage", f"KRS ends September ≥90% full in {st['fill_above']} years above {st['fill_threshold']} TMC of monsoon inflow. We forecast that inflow with a likely range.")}
 {tile("2 · How early?", k['reliable'], f"4 years in 5 within ±{GOOD}% at both dams; {k['reliable_rain']} with a 30-day rain forecast. A dry season is flagged by mid-August.")}
-{tile("3 · Next 15 days?", f"±{n15k['median_pct']:.0f}% · ±{n15h['median_pct']:.0f}%", "typical error at KRS · Hemavathy with a 15-day rain forecast")}
+<div class="tile"><div class="k">3 · Water in the next day, 7 days, 15 days?</div>
+<table class="hzt"><tr><td>Next day</td><td>{hz['day']}</td></tr><tr><td>Next 7 days</td><td>{hz['d7']}</td></tr><tr><td>Next 15 days</td><td>{hz['d15']}</td></tr></table>
+<div class="s">typical error, KRS · Hemavathy; next day from today's data, 7 and 15 days with a rain forecast</div></div>
 </div></div>"""),
         ("", f"""<div class="kicker">Approach</div><h2>From raw data to a forecast an engineer can use</h2><p class="lede">Every score is on years the model never saw.</p><div class="body"><div class="flowline">
 {node("n-data", "Data", "IMD 0.25° daily rain, dam records for KRS, Harangi and Hemavathy (1991–2025), catchment and river maps, TerraClimate soil moisture.")}
@@ -363,9 +402,9 @@ def presentation(D):
         ("dry", f"""<div class="kicker">Question 2 · How early?</div><h2>A dry season can be called by mid-August</h2>
 <p class="lede">Share of the driest third of years flagged in advance, by forecast date. By 15 August: {at(k, '15 Aug')['dry_caught']} at KRS and {at(h, '15 Aug')['dry_caught']} at Hemavathy.</p>
 <div class="legend" id="p-dry-leg"></div><div class="body"><div class="chart" id="p-dry"></div></div>"""),
-        ("n15", f"""<div class="kicker">Question 3 · Next 15 days</div><h2>A rain forecast is what makes the 15-day outlook work</h2>
-<p class="lede">Typical error of the inflow over the next 15 days, test years 2020–2023. NSE with a 15-day rain forecast: {n15k['NSE']:.2f} at KRS, {n15h['NSE']:.2f} at Hemavathy.</p>
-<div class="legend" id="p-n15-leg"></div><div class="body"><div class="chart" id="p-n15"></div></div>"""),
+        ("n15", f"""<div class="kicker">Question 3 · Water in the next day, 7 days, 15 days</div><h2>Tomorrow from today's data; a week or two ahead needs a rain forecast</h2>
+<p class="lede">Typical error of the inflow volume, KRS · Hemavathy, test years 2020–2023. Next day {hz['day']}; next 7 days {hz['d7']}; next 15 days {hz['d15']} with a rain forecast ({hz['d15_none']} without).</p>
+<div class="legend" id="p-hz-leg"></div><div class="body">{HZ_HTML.format(p="p-hz")}</div>"""),
         ("lad", f"""<div class="kicker">What improved performance</div><h2>Daily inflow: NSE {k['daily_nse']:.2f} at KRS, {h['daily_nse']:.2f} at Hemavathy on unseen years</h2>
 <p class="lede">Each grid cell's own delay and multiplier, and soil moisture, lift accuracy; Hemavathy gains most from soil because its inflow comes straight from rain on its own catchment.</p>
 <div class="body"><div class="row2c"><div class="mini"><h3>KRS</h3><div class="chart" id="p-lad-k"></div></div><div class="mini"><h3>Hemavathy</h3><div class="chart" id="p-lad-h"></div></div></div></div>"""),
@@ -391,7 +430,7 @@ const draw = {
   tl: () => { chartTimeline('p-tl-k', 'krs', H()); chartTimeline('p-tl-h', 'hemavathy', H());
     legend(document.getElementById('p-tl-leg'), [{ n: 'Assume an average year', c: C.ink3, cls: 'dash' }, { n: 'Our forecast, KRS', c: DC.krs }, { n: 'Our forecast, Hemavathy', c: DC.hemavathy }, { n: '+ 30-day rain forecast', c: C.orange }]); },
   dry: () => legend(document.getElementById('p-dry-leg'), chartDry('p-dry', H())),
-  n15: () => legend(document.getElementById('p-n15-leg'), chartN15('p-n15', H() * 0.85)),
+  n15: () => legend(document.getElementById('p-hz-leg'), chartHzAll('p-hz', H() * 0.8)),
   lad: () => { chartLadderMini('p-lad-k', 'krs'); chartLadderMini('p-lad-h', 'hemavathy'); },
   pap: () => legend(document.getElementById('p-pap-leg'), chartPaper('p-pap', H() * 0.7)),
 };

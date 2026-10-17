@@ -15,7 +15,7 @@ We answer it for two Cauvery dams, **Krishnaraja Sagar (KRS)** and **Hemavathy**
 |---|---|
 | 1. How much water will the monsoon bring? | June–September inflow decides storage: KRS ends September ≥90% full in 19 of 21 years above 86 TMC of inflow. We forecast it with an 80% likely range by replaying every past monsoon's remaining rain. |
 | 2. How early can engineers know? | From **15 August** at both dams (4 years in 5 within ±20%), or 1 August with a 30-day rain forecast. A dry season is flagged by 15 August (10 of 12 dry years at KRS, 11 of 12 at Hemavathy). |
-| 3. What arrives in the next 15 days? | Typical error ±19% (KRS) and ±22% (Hemavathy) with a 15-day rain forecast; today's data alone gives ±48% / ±44%. |
+| 3. How much water will arrive in the next day, 7 days and 15 days? | Typical error, KRS / Hemavathy: **next day ±19% / ±20%** from today's data alone; **next 7 days ±22% / ±27%** and **next 15 days ±19% / ±22%** with a rain forecast for those days (without one: ±39% / ±48% and ±48% / ±44%). |
 
 ## Detailed reports
 
