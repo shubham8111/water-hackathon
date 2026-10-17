@@ -187,7 +187,9 @@ function chartHz(id, hz, h = 210) {
       f.g.append('rect').attr('x', 0).attr('y', y0(lab) + y1(dam)).attr('height', y1.bandwidth()).attr('width', x(v.median_pct)).attr('rx', 3).attr('fill', DC[dam])
         .on('mousemove', (ev) => showTip(ev, `<b>${D.dams[dam].short} · ${HZ.find((z) => z[0] === hz)[1].toLowerCase()} · ${lab}</b>` + row(DC[dam], 'Typical error', `±${Math.round(v.median_pct)}%`)
           + row(DC[dam], '4 days in 5 within', `±${Math.round(v.p80_pct)}%`) + row(DC[dam], 'NSE', v.NSE.toFixed(2)) + row(DC[dam], 'Average volume', `${H.mean_volume_tmc} TMC`))).on('mouseleave', hideTip);
-      f.g.append('text').attr('class', 'lbl').attr('x', x(v.median_pct) + 5).attr('y', y0(lab) + y1(dam) + y1.bandwidth() / 2 + 4).text(`±${Math.round(v.median_pct)}% · NSE ${v.NSE.toFixed(2)}`); });
+      const t = f.g.append('text').attr('x', x(v.median_pct) + 5).attr('y', y0(lab) + y1(dam) + y1.bandwidth() / 2 + 4).attr('font-size', 12);
+      t.append('tspan').attr('font-weight', 700).attr('fill', C.ink).text(`NSE ${v.NSE.toFixed(2)}`);
+      t.append('tspan').attr('fill', C.ink3).text(`  ±${Math.round(v.median_pct)}%`); });
   });
 }
 function chartHzAll(prefix, h) { HZ.forEach(([k]) => chartHz(`${prefix}-${k}`, k, h));
@@ -246,6 +248,8 @@ FINAL_CSS = """
 @media (max-width:760px) { .row2c { grid-template-columns:1fr; } }
 .mini h3 { font-size:.95rem; margin:0 0 4px; }
 .links a { color:var(--blue); }
+.err { color:var(--ink3); font-weight:400; } .nse { color:var(--ink); font-weight:700; }
+.tile .v .err { font-size:.6em; }
 .nset { font-size:.85rem; } .nset th, .nset td { white-space:nowrap; }
 """
 
@@ -254,10 +258,18 @@ def hz_text(D):
     """Short answers for the next day / 7 days / 15 days (typical error and NSE, KRS · Hemavathy)."""
     g = lambda dam, h, m, k="median_pct": D["dams"][dam]["hz"][str(h)]["models"][m][k]
     st, rf = "Today's state only", "+ rain forecast for those days"
-    pair = lambda h, m: f"±{g('krs', h, m):.0f}% · ±{g('hemavathy', h, m):.0f}%"
-    npair = lambda h, m: f"{g('krs', h, m, 'NSE'):.2f} · {g('hemavathy', h, m, 'NSE'):.2f}"
+    pair = lambda h, m: f"<span class='err'>±{g('krs', h, m):.0f}% · ±{g('hemavathy', h, m):.0f}%</span>"
+    npair = lambda h, m: f"<b class='nse'>NSE {g('krs', h, m, 'NSE'):.2f} · {g('hemavathy', h, m, 'NSE'):.2f}</b>"
     return {"day": pair(1, st), "d7": pair(7, rf), "d15": pair(15, rf), "d7_none": pair(7, st), "d15_none": pair(15, st),
             "n_day": npair(1, st), "n_d7": npair(7, rf), "n_d15": npair(15, rf), "n_d7_none": npair(7, st), "n_d15_none": npair(15, st)}
+
+
+def nse_pair(a, b):
+    return f"<b class='nse'>NSE {a:.2f} · {b:.2f}</b>"
+
+
+def err(t):
+    return f"<span class='err'>{t}</span>"
 
 
 def nse_table(D):
@@ -285,9 +297,9 @@ def final_page(D):
     n15k, n15h = k["n15"]["+ next 15 days of rain"], h["n15"]["+ next 15 days of rain"]
     hz = hz_text(D)
     tiles = "".join([
-        tile("Reliable monsoon-total estimate", k["reliable"], f"4 years in 5 within ±{GOOD}% at both dams, NSE {at(k, k['reliable'])['esp_nse']:.2f} · {at(h, h['reliable'])['esp_nse']:.2f} · {k['reliable_rain']} with a 30-day rain forecast"),
+        tile("Reliable monsoon-total estimate", k["reliable"], f"{nse_pair(at(k, k['reliable'])['esp_nse'], at(h, h['reliable'])['esp_nse'])}, KRS · Hemavathy " + err(f"(4 years in 5 within ±{GOOD}%)") + f" · {k['reliable_rain']} with a 30-day rain forecast"),
         tile("Dry season flagged by 15 Aug", f"{dryk} · {dryh}", "dry years caught at KRS · Hemavathy"),
-        tile("Water arriving tomorrow", hz["day"], f"typical error, KRS · Hemavathy, from today's data (NSE {hz['n_day']}) · 7 days {hz['d7']}, 15 days {hz['d15']} with a rain forecast"),
+        tile("Water arriving tomorrow", hz["n_day"], f"KRS · Hemavathy, from today's data ({hz['day']}) · 7 days {hz['n_d7']} ({hz['d7']}), 15 days {hz['n_d15']} ({hz['d15']}) with a rain forecast"),
         tile("Daily inflow accuracy (NSE)", f"{k['daily_nse']:.2f} · {h['daily_nse']:.2f}", "on unseen years 2020–2023; 1 = perfect")])
     ka, ha = at(k, "1 Aug"), at(h, "1 Aug")
     st = k["eda_stats"]
@@ -315,7 +327,7 @@ def final_page(D):
 
 <h2 class="sec">Question 2 · How early can engineers make a reasonably informed estimate?</h2>
 <div class="card"><span class="q">ANSWER</span>
-<p class="answer">From {k['reliable']} at both dams (4 years in 5 within ±{GOOD}%, NSE {at(k, k['reliable'])['esp_nse']:.2f} · {at(h, h['reliable'])['esp_nse']:.2f}), or from {k['reliable_rain']} with a 30-day rain forecast (NSE {at(k, k['reliable_rain'])['f30_nse']:.2f} · {at(h, h['reliable_rain'])['f30_nse']:.2f}). Before July, NSE is about 0: no better than assuming an average year.</p>
+<p class="answer">From {k['reliable']} at both dams ({nse_pair(at(k, k['reliable'])['esp_nse'], at(h, h['reliable'])['esp_nse'])}; {err(f"4 years in 5 within ±{GOOD}%")}), or from {k['reliable_rain']} with a 30-day rain forecast ({nse_pair(at(k, k['reliable_rain'])['f30_nse'], at(h, h['reliable_rain'])['f30_nse'])}). Before July, NSE is about 0: no better than assuming an average year.</p>
 <p class="sub">On 1 August the typical error is ±{ka['esp_med']:.0f}% at KRS and ±{ha['esp_med']:.0f}% at Hemavathy. A median of about half the season's inflow is still to come then, so the rain of August decides the outcome.</p>
 <div class="legend" id="f-tl-leg"></div>
 <div class="row2c"><div class="mini"><h3>KRS</h3><div class="chart" id="f-tl-k"></div></div><div class="mini"><h3>Hemavathy</h3><div class="chart" id="f-tl-h"></div></div></div>
@@ -327,8 +339,8 @@ def final_page(D):
 
 <h2 class="sec">Question 3 · How much water will reach the dam in the next day, 7 days and 15 days?</h2>
 <div class="card"><span class="q">ANSWER</span>
-<p class="answer">Next day: {hz['day']} from today's data alone (NSE {hz['n_day']}). Next 7 days: {hz['d7']} (NSE {hz['n_d7']}), and next 15 days: {hz['d15']} (NSE {hz['n_d15']}), with a rain forecast for those days.</p>
-<p class="sub">Typical error, KRS · Hemavathy. Total inflow over the period after each forecast day, June–September of 2020–2023, never seen in training. Tomorrow's inflow is mostly water already on its way, so today's data is enough; beyond a few days the coming rain decides it (without a rain forecast: {hz['d7_none']}, NSE {hz['n_d7_none']}, for 7 days; {hz['d15_none']}, NSE {hz['n_d15_none']}, for 15 days). The rain forecast is the rain that actually fell, so those are best-case numbers. Shorter bars are better; hover for NSE and volumes.</p>
+<p class="answer">Next day: {hz['n_day']} from today's data alone ({hz['day']}). Next 7 days: {hz['n_d7']} ({hz['d7']}), and next 15 days: {hz['n_d15']} ({hz['d15']}), with a rain forecast for those days.</p>
+<p class="sub">NSE in bold, typical error in grey; KRS · Hemavathy. Total inflow over the period after each forecast day, June–September of 2020–2023, never seen in training. Tomorrow's inflow is mostly water already on its way, so today's data is enough; beyond a few days the coming rain decides it (without a rain forecast: {hz['n_d7_none']} ({hz['d7_none']}) for 7 days; {hz['n_d15_none']} ({hz['d15_none']}) for 15 days). The rain forecast is the rain that actually fell, so those are best-case numbers. Bar length = typical error (shorter is better); hover for volumes.</p>
 <div class="legend" id="f-hz-leg"></div>{HZ_HTML.format(p="f-hz")}</div>
 
 <h2 class="sec">How we got there</h2>
@@ -376,8 +388,8 @@ html, body { height:100%; overflow:hidden; }
 .slide .tile .v { font-size:clamp(1.5rem,2.6vw,2.4rem); }
 .big3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
 .big3 .tile .v { font-size:clamp(1.3rem,2.2vw,2rem); }
-.hzt td.nn { font-weight:400; color:var(--ink2); font-size:.8em; }
-.hzt { width:auto; margin:6px 0 4px; font-size:clamp(.95rem,1.25vw,1.2rem); } .hzt td { border:0; padding:3px 12px 3px 0; white-space:nowrap; } .hzt td + td { font-weight:650; font-variant-numeric:tabular-nums; }
+.hzt td.nn { font-size:.85em; }
+.hzt { width:auto; margin:6px 0 4px; font-size:clamp(.95rem,1.25vw,1.2rem); } .hzt td { border:0; padding:3px 12px 3px 0; white-space:nowrap; } .hzt td + td { font-variant-numeric:tabular-nums; }
 .slide .tile .s { font-size:clamp(.9rem,1.2vw,1.1rem); line-height:1.45; } .slide .tile { padding:22px 24px; }
 .flowline { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
 .flowline .node { font-size:.95rem; }
@@ -403,10 +415,10 @@ def presentation(D):
 <p class="lede" style="font-size:1rem">Use ← → to move between slides.</p></div>"""),
         ("", f"""<div class="kicker">The answers</div><h2>Three questions, three answers</h2><div class="body"><div class="big3">
 {tile("1 · How much water?", "Inflow decides storage", f"KRS ends September ≥90% full in {st['fill_above']} years above {st['fill_threshold']} TMC of monsoon inflow. We forecast that inflow with a likely range.")}
-{tile("2 · How early?", k['reliable'], f"4 years in 5 within ±{GOOD}% at both dams (NSE {at(k, k['reliable'])['esp_nse']:.2f} · {at(h, h['reliable'])['esp_nse']:.2f}); {k['reliable_rain']} with a 30-day rain forecast (NSE {at(k, k['reliable_rain'])['f30_nse']:.2f} · {at(h, h['reliable_rain'])['f30_nse']:.2f}). A dry season is flagged by mid-August.")}
+{tile("2 · How early?", k['reliable'], f"{nse_pair(at(k, k['reliable'])['esp_nse'], at(h, h['reliable'])['esp_nse'])} at both dams " + err(f"(4 years in 5 within ±{GOOD}%)") + f"; {k['reliable_rain']} with a 30-day rain forecast ({nse_pair(at(k, k['reliable_rain'])['f30_nse'], at(h, h['reliable_rain'])['f30_nse'])}). A dry season is flagged by mid-August.")}
 <div class="tile"><div class="k">3 · Water in the next day, 7 days, 15 days?</div>
-<table class="hzt"><tr><td>Next day</td><td>{hz['day']}</td><td class="nn">NSE {hz['n_day']}</td></tr><tr><td>Next 7 days</td><td>{hz['d7']}</td><td class="nn">NSE {hz['n_d7']}</td></tr><tr><td>Next 15 days</td><td>{hz['d15']}</td><td class="nn">NSE {hz['n_d15']}</td></tr></table>
-<div class="s">typical error and NSE, KRS · Hemavathy; next day from today's data, 7 and 15 days with a rain forecast</div></div>
+<table class="hzt"><tr><td>Next day</td><td>{hz['n_day']}</td><td class="nn">{hz['day']}</td></tr><tr><td>Next 7 days</td><td>{hz['n_d7']}</td><td class="nn">{hz['d7']}</td></tr><tr><td>Next 15 days</td><td>{hz['n_d15']}</td><td class="nn">{hz['d15']}</td></tr></table>
+<div class="s">NSE in bold, typical error in grey; KRS · Hemavathy. Next day from today's data, 7 and 15 days with a rain forecast</div></div>
 </div></div>"""),
         ("", f"""<div class="kicker">Approach</div><h2>From raw data to a forecast an engineer can use</h2><p class="lede">Every score is on years the model never saw.</p><div class="body"><div class="flowline">
 {node("n-data", "Data", "IMD 0.25° daily rain, dam records for KRS, Harangi and Hemavathy (1991–2025), catchment and river maps, TerraClimate soil moisture.")}
@@ -421,13 +433,13 @@ def presentation(D):
 <p class="lede">On each date the inflow so far is fixed and the rest of the season is replayed with every other year's rain. Band = 80% likely range; dashed = what actually came.</p>
 <div><div class="seg" id="pfan-dam"></div> <select class="yr" id="pfan-year" aria-label="Year"></select></div><div class="body"><div class="chart" id="pfan-chart"></div></div>"""),
         ("tl", f"""<div class="kicker">Question 2 · How early?</div><h2>Reasonably informed from {k['reliable']}; from {k['reliable_rain']} with a 30-day rain forecast</h2>
-<p class="lede">Error not exceeded in 4 years out of 5, by the date the forecast is made. Filled dots = within ±{GOOD}%. NSE on {k['reliable']}: {at(k, k['reliable'])['esp_nse']:.2f} at KRS, {at(h, h['reliable'])['esp_nse']:.2f} at Hemavathy; about 0 before July.</p>
+<p class="lede">Error not exceeded in 4 years out of 5, by the date the forecast is made. Filled dots = within ±{GOOD}%. On {k['reliable']}: {nse_pair(at(k, k['reliable'])['esp_nse'], at(h, h['reliable'])['esp_nse'])} (KRS · Hemavathy); about 0 before July.</p>
 <div class="legend" id="p-tl-leg"></div><div class="body"><div class="row2c"><div class="mini"><h3>KRS</h3><div class="chart" id="p-tl-k"></div></div><div class="mini"><h3>Hemavathy</h3><div class="chart" id="p-tl-h"></div></div></div></div>"""),
         ("dry", f"""<div class="kicker">Question 2 · How early?</div><h2>A dry season can be called by mid-August</h2>
 <p class="lede">Share of the driest third of years flagged in advance, by forecast date. By 15 August: {at(k, '15 Aug')['dry_caught']} at KRS and {at(h, '15 Aug')['dry_caught']} at Hemavathy.</p>
 <div class="legend" id="p-dry-leg"></div><div class="body"><div class="chart" id="p-dry"></div></div>"""),
         ("n15", f"""<div class="kicker">Question 3 · Water in the next day, 7 days, 15 days</div><h2>Tomorrow from today's data; a week or two ahead needs a rain forecast</h2>
-<p class="lede">Typical error and NSE of the inflow volume, KRS · Hemavathy, test years 2020–2023. Next day {hz['day']} (NSE {hz['n_day']}); next 7 days {hz['d7']} (NSE {hz['n_d7']}); next 15 days {hz['d15']} (NSE {hz['n_d15']}) with a rain forecast.</p>
+<p class="lede">KRS · Hemavathy, test years 2020–2023, NSE in bold, typical error in grey. Next day {hz['n_day']} {hz['day']}; next 7 days {hz['n_d7']} {hz['d7']}; next 15 days {hz['n_d15']} {hz['d15']} with a rain forecast.</p>
 <div class="legend" id="p-hz-leg"></div><div class="body">{HZ_HTML.format(p="p-hz")}</div>"""),
         ("lad", f"""<div class="kicker">What improved performance</div><h2>Daily inflow: NSE {k['daily_nse']:.2f} at KRS, {h['daily_nse']:.2f} at Hemavathy on unseen years</h2>
 <p class="lede">Each grid cell's own delay and multiplier, and soil moisture, lift accuracy; Hemavathy gains most from soil because its inflow comes straight from rain on its own catchment.</p>

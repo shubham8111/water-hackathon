@@ -83,6 +83,8 @@ th { color:var(--ink2); font-weight:600; } td.n { text-align:right; font-variant
 @media (max-width:760px) { .row2c { grid-template-columns:1fr; } }
 .mini h3 { font-size:.95rem; margin:0 0 4px; }
 .links a { color:var(--blue); }
+.err { color:var(--ink3); font-weight:400; } .nse { color:var(--ink); font-weight:700; }
+.tile .v .err { font-size:.6em; }
 .nset { font-size:.85rem; } .nset th, .nset td { white-space:nowrap; }
 
 html, body { height:100%; overflow:hidden; }
@@ -97,8 +99,8 @@ html, body { height:100%; overflow:hidden; }
 .slide .tile .v { font-size:clamp(1.5rem,2.6vw,2.4rem); }
 .big3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
 .big3 .tile .v { font-size:clamp(1.3rem,2.2vw,2rem); }
-.hzt td.nn { font-weight:400; color:var(--ink2); font-size:.8em; }
-.hzt { width:auto; margin:6px 0 4px; font-size:clamp(.95rem,1.25vw,1.2rem); } .hzt td { border:0; padding:3px 12px 3px 0; white-space:nowrap; } .hzt td + td { font-weight:650; font-variant-numeric:tabular-nums; }
+.hzt td.nn { font-size:.85em; }
+.hzt { width:auto; margin:6px 0 4px; font-size:clamp(.95rem,1.25vw,1.2rem); } .hzt td { border:0; padding:3px 12px 3px 0; white-space:nowrap; } .hzt td + td { font-variant-numeric:tabular-nums; }
 .slide .tile .s { font-size:clamp(.9rem,1.2vw,1.1rem); line-height:1.45; } .slide .tile { padding:22px 24px; }
 .flowline { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
 .flowline .node { font-size:.95rem; }
@@ -116,10 +118,10 @@ html, body { height:100%; overflow:hidden; }
 <p class="lede">Forecasting June–September inflow to Krishnaraja Sagar (KRS) and Hemavathy dams, Cauvery basin, from rainfall, dam records and soil moisture.</p>
 <p class="lede" style="font-size:1rem">Use ← → to move between slides.</p></div></section><section class="slide" data-k=""><div class="kicker">The answers</div><h2>Three questions, three answers</h2><div class="body"><div class="big3">
 <div class="tile"><div class="k">1 · How much water?</div><div class="v">Inflow decides storage</div><div class="s">KRS ends September ≥90% full in 19/21 years above 86 TMC of monsoon inflow. We forecast that inflow with a likely range.</div></div>
-<div class="tile"><div class="k">2 · How early?</div><div class="v">15 Aug</div><div class="s">4 years in 5 within ±20% at both dams (NSE 0.90 · 0.93); 1 Aug with a 30-day rain forecast (NSE 0.91 · 0.94). A dry season is flagged by mid-August.</div></div>
+<div class="tile"><div class="k">2 · How early?</div><div class="v">15 Aug</div><div class="s"><b class='nse'>NSE 0.90 · 0.93</b> at both dams <span class='err'>(4 years in 5 within ±20%)</span>; 1 Aug with a 30-day rain forecast (<b class='nse'>NSE 0.91 · 0.94</b>). A dry season is flagged by mid-August.</div></div>
 <div class="tile"><div class="k">3 · Water in the next day, 7 days, 15 days?</div>
-<table class="hzt"><tr><td>Next day</td><td>±19% · ±20%</td><td class="nn">NSE 0.88 · 0.91</td></tr><tr><td>Next 7 days</td><td>±22% · ±27%</td><td class="nn">NSE 0.93 · 0.76</td></tr><tr><td>Next 15 days</td><td>±19% · ±22%</td><td class="nn">NSE 0.93 · 0.88</td></tr></table>
-<div class="s">typical error and NSE, KRS · Hemavathy; next day from today's data, 7 and 15 days with a rain forecast</div></div>
+<table class="hzt"><tr><td>Next day</td><td><b class='nse'>NSE 0.88 · 0.91</b></td><td class="nn"><span class='err'>±19% · ±20%</span></td></tr><tr><td>Next 7 days</td><td><b class='nse'>NSE 0.93 · 0.76</b></td><td class="nn"><span class='err'>±22% · ±27%</span></td></tr><tr><td>Next 15 days</td><td><b class='nse'>NSE 0.93 · 0.88</b></td><td class="nn"><span class='err'>±19% · ±22%</span></td></tr></table>
+<div class="s">NSE in bold, typical error in grey; KRS · Hemavathy. Next day from today's data, 7 and 15 days with a rain forecast</div></div>
 </div></div></section><section class="slide" data-k=""><div class="kicker">Approach</div><h2>From raw data to a forecast an engineer can use</h2><p class="lede">Every score is on years the model never saw.</p><div class="body"><div class="flowline">
 <div class="node n-data"><b>Data</b>IMD 0.25° daily rain, dam records for KRS, Harangi and Hemavathy (1991–2025), catchment and river maps, TerraClimate soil moisture.</div>
 <div class="node n-prep"><b>Clean</b>Missing days, storage spikes, zero monsoon inflow, Jul–Sep 2019 outflow in the wrong units: all fixed and logged.</div>
@@ -130,11 +132,11 @@ html, body { height:100%; overflow:hidden; }
 <div class="body"><div class="row2c"><div class="mini"><h3>KRS</h3><div class="chart" id="p-stor-k"></div></div><div class="mini"><h3>Hemavathy</h3><div class="chart" id="p-stor-h"></div></div></div></div></section><section class="slide" data-k="fan"><div class="kicker">Question 1 · How much water?</div><h2>Replaying every past monsoon gives a forecast and a likely range</h2>
 <p class="lede">On each date the inflow so far is fixed and the rest of the season is replayed with every other year's rain. Band = 80% likely range; dashed = what actually came.</p>
 <div><div class="seg" id="pfan-dam"></div> <select class="yr" id="pfan-year" aria-label="Year"></select></div><div class="body"><div class="chart" id="pfan-chart"></div></div></section><section class="slide" data-k="tl"><div class="kicker">Question 2 · How early?</div><h2>Reasonably informed from 15 Aug; from 1 Aug with a 30-day rain forecast</h2>
-<p class="lede">Error not exceeded in 4 years out of 5, by the date the forecast is made. Filled dots = within ±20%. NSE on 15 Aug: 0.90 at KRS, 0.93 at Hemavathy; about 0 before July.</p>
+<p class="lede">Error not exceeded in 4 years out of 5, by the date the forecast is made. Filled dots = within ±20%. On 15 Aug: <b class='nse'>NSE 0.90 · 0.93</b> (KRS · Hemavathy); about 0 before July.</p>
 <div class="legend" id="p-tl-leg"></div><div class="body"><div class="row2c"><div class="mini"><h3>KRS</h3><div class="chart" id="p-tl-k"></div></div><div class="mini"><h3>Hemavathy</h3><div class="chart" id="p-tl-h"></div></div></div></div></section><section class="slide" data-k="dry"><div class="kicker">Question 2 · How early?</div><h2>A dry season can be called by mid-August</h2>
 <p class="lede">Share of the driest third of years flagged in advance, by forecast date. By 15 August: 10/12 at KRS and 11/12 at Hemavathy.</p>
 <div class="legend" id="p-dry-leg"></div><div class="body"><div class="chart" id="p-dry"></div></div></section><section class="slide" data-k="n15"><div class="kicker">Question 3 · Water in the next day, 7 days, 15 days</div><h2>Tomorrow from today's data; a week or two ahead needs a rain forecast</h2>
-<p class="lede">Typical error and NSE of the inflow volume, KRS · Hemavathy, test years 2020–2023. Next day ±19% · ±20% (NSE 0.88 · 0.91); next 7 days ±22% · ±27% (NSE 0.93 · 0.76); next 15 days ±19% · ±22% (NSE 0.93 · 0.88) with a rain forecast.</p>
+<p class="lede">KRS · Hemavathy, test years 2020–2023, NSE in bold, typical error in grey. Next day <b class='nse'>NSE 0.88 · 0.91</b> <span class='err'>±19% · ±20%</span>; next 7 days <b class='nse'>NSE 0.93 · 0.76</b> <span class='err'>±22% · ±27%</span>; next 15 days <b class='nse'>NSE 0.93 · 0.88</b> <span class='err'>±19% · ±22%</span> with a rain forecast.</p>
 <div class="legend" id="p-hz-leg"></div><div class="body"><div class="row3">
 <div class="mini"><h3>Next day</h3><div class="chart" id="p-hz-1"></div></div>
 <div class="mini"><h3>Next 7 days</h3><div class="chart" id="p-hz-7"></div></div>
@@ -290,7 +292,9 @@ function chartHz(id, hz, h = 210) {
       f.g.append('rect').attr('x', 0).attr('y', y0(lab) + y1(dam)).attr('height', y1.bandwidth()).attr('width', x(v.median_pct)).attr('rx', 3).attr('fill', DC[dam])
         .on('mousemove', (ev) => showTip(ev, `<b>${D.dams[dam].short} · ${HZ.find((z) => z[0] === hz)[1].toLowerCase()} · ${lab}</b>` + row(DC[dam], 'Typical error', `±${Math.round(v.median_pct)}%`)
           + row(DC[dam], '4 days in 5 within', `±${Math.round(v.p80_pct)}%`) + row(DC[dam], 'NSE', v.NSE.toFixed(2)) + row(DC[dam], 'Average volume', `${H.mean_volume_tmc} TMC`))).on('mouseleave', hideTip);
-      f.g.append('text').attr('class', 'lbl').attr('x', x(v.median_pct) + 5).attr('y', y0(lab) + y1(dam) + y1.bandwidth() / 2 + 4).text(`±${Math.round(v.median_pct)}% · NSE ${v.NSE.toFixed(2)}`); });
+      const t = f.g.append('text').attr('x', x(v.median_pct) + 5).attr('y', y0(lab) + y1(dam) + y1.bandwidth() / 2 + 4).attr('font-size', 12);
+      t.append('tspan').attr('font-weight', 700).attr('fill', C.ink).text(`NSE ${v.NSE.toFixed(2)}`);
+      t.append('tspan').attr('fill', C.ink3).text(`  ±${Math.round(v.median_pct)}%`); });
   });
 }
 function chartHzAll(prefix, h) { HZ.forEach(([k]) => chartHz(`${prefix}-${k}`, k, h));
