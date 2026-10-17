@@ -1,0 +1,295 @@
+[
+  {
+    "dataset": "krs",
+    "issue": "Missing calendar days",
+    "action": "Re-indexed to a continuous daily series",
+    "count": 1,
+    "detail": [
+      "2019-03-31"
+    ]
+  },
+  {
+    "dataset": "krs",
+    "issue": "Single-day storage spikes (>3 TMC jump that reverses next day)",
+    "action": "Set to NaN and interpolated",
+    "count": 5,
+    "detail": [
+      "1999-02-26",
+      "2001-01-21",
+      "2001-05-23",
+      "2002-03-28",
+      "2003-10-08"
+    ]
+  },
+  {
+    "dataset": "krs",
+    "issue": "Storage above design capacity (49.45 TMC), up to 140% full",
+    "action": "Set to NaN and interpolated",
+    "count": 3,
+    "detail": [
+      "2011-02-14",
+      "2011-02-15",
+      "2011-02-16"
+    ]
+  },
+  {
+    "dataset": "krs",
+    "issue": "Zero inflow reported during Jun-Sep",
+    "action": "Treated as missing",
+    "count": 1,
+    "detail": [
+      "1997-06-01"
+    ]
+  },
+  {
+    "dataset": "krs",
+    "issue": "Zero inflow outside monsoon",
+    "action": "Kept (plausible dry-season value)",
+    "count": 380,
+    "detail": null
+  },
+  {
+    "dataset": "krs",
+    "issue": "Missing values in 'pct'",
+    "action": "Linear interpolation for gaps <= 3 days; longer gaps left NaN",
+    "count": 10,
+    "detail": "10 filled, 0 left missing"
+  },
+  {
+    "dataset": "krs",
+    "issue": "Missing values in 'storage'",
+    "action": "Linear interpolation for gaps <= 3 days; longer gaps left NaN",
+    "count": 10,
+    "detail": "10 filled, 0 left missing"
+  },
+  {
+    "dataset": "krs",
+    "issue": "Missing values in 'inflow'",
+    "action": "Linear interpolation for gaps <= 3 days; longer gaps left NaN",
+    "count": 10,
+    "detail": "10 filled, 0 left missing"
+  },
+  {
+    "dataset": "krs",
+    "issue": "Missing values in 'outflow'",
+    "action": "Linear interpolation for gaps <= 3 days; longer gaps left NaN",
+    "count": 1,
+    "detail": "1 filled, 0 left missing"
+  },
+  {
+    "dataset": "krs",
+    "issue": "Outflow not in cusecs (decimal values, far too small; e.g. Jul-Sep 2019)",
+    "action": "Replaced with water-balance outflow: inflow - storage change",
+    "count": 71,
+    "detail": "2019-07-10 .. 2019-09-18; reported total 0.22 TMC -> 93.6 TMC"
+  },
+  {
+    "dataset": "krs",
+    "issue": "Water-balance residual > 1 TMC/day (storage change vs inflow - outflow)",
+    "action": "Flagged only (likely evaporation/diversions or rounding); not modified",
+    "count": 61,
+    "detail": null
+  },
+  {
+    "dataset": "hemavathy",
+    "issue": "Missing calendar days",
+    "action": "Re-indexed to a continuous daily series",
+    "count": 1,
+    "detail": [
+      "2019-03-31"
+    ]
+  },
+  {
+    "dataset": "hemavathy",
+    "issue": "Single-day storage spikes (>3 TMC jump that reverses next day)",
+    "action": "Set to NaN and interpolated",
+    "count": 13,
+    "detail": [
+      "1992-01-20",
+      "1992-05-08",
+      "1994-12-02",
+      "1996-03-02",
+      "1998-09-04",
+      "1999-03-17",
+      "2005-09-29",
+      "2005-10-14",
+      "2006-03-28",
+      "2007-12-24"
+    ]
+  },
+  {
+    "dataset": "hemavathy",
+    "issue": "Storage above design capacity (37.1 TMC), up to 176% full",
+    "action": "Set to NaN and interpolated",
+    "count": 2,
+    "detail": [
+      "2000-09-30",
+      "2005-09-30"
+    ]
+  },
+  {
+    "dataset": "hemavathy",
+    "issue": "Zero inflow reported during Jun-Sep",
+    "action": "Treated as missing",
+    "count": 9,
+    "detail": [
+      "2020-06-01",
+      "2020-06-02",
+      "2020-06-03",
+      "2020-06-04",
+      "2020-06-06",
+      "2020-06-07",
+      "2020-06-08",
+      "2020-06-09",
+      "2020-06-10"
+    ]
+  },
+  {
+    "dataset": "hemavathy",
+    "issue": "Zero inflow outside monsoon",
+    "action": "Kept (plausible dry-season value)",
+    "count": 34,
+    "detail": null
+  },
+  {
+    "dataset": "hemavathy",
+    "issue": "Missing values in 'pct'",
+    "action": "Linear interpolation for gaps <= 3 days; longer gaps left NaN",
+    "count": 22,
+    "detail": "22 filled, 0 left missing"
+  },
+  {
+    "dataset": "hemavathy",
+    "issue": "Missing values in 'storage'",
+    "action": "Linear interpolation for gaps <= 3 days; longer gaps left NaN",
+    "count": 22,
+    "detail": "22 filled, 0 left missing"
+  },
+  {
+    "dataset": "hemavathy",
+    "issue": "Missing values in 'inflow'",
+    "action": "Linear interpolation for gaps <= 3 days; longer gaps left NaN",
+    "count": 22,
+    "detail": "16 filled, 6 left missing"
+  },
+  {
+    "dataset": "hemavathy",
+    "issue": "Missing values in 'outflow'",
+    "action": "Linear interpolation for gaps <= 3 days; longer gaps left NaN",
+    "count": 1,
+    "detail": "1 filled, 0 left missing"
+  },
+  {
+    "dataset": "hemavathy",
+    "issue": "Outflow not in cusecs (decimal values, far too small; e.g. Jul-Sep 2019)",
+    "action": "Replaced with water-balance outflow: inflow - storage change",
+    "count": 73,
+    "detail": "2019-07-10 .. 2019-09-21; reported total 0.14 TMC -> 53.8 TMC"
+  },
+  {
+    "dataset": "hemavathy",
+    "issue": "Water-balance residual > 1 TMC/day (storage change vs inflow - outflow)",
+    "action": "Flagged only (likely evaporation/diversions or rounding); not modified",
+    "count": 27,
+    "detail": null
+  },
+  {
+    "dataset": "harangi",
+    "issue": "3 title/blank rows above the header",
+    "action": "Detected header row and skipped preamble",
+    "count": 3,
+    "detail": null
+  },
+  {
+    "dataset": "harangi",
+    "issue": "Missing calendar days",
+    "action": "Re-indexed to a continuous daily series",
+    "count": 1,
+    "detail": [
+      "2019-03-31"
+    ]
+  },
+  {
+    "dataset": "harangi",
+    "issue": "Single-day storage spikes (>3 TMC jump that reverses next day)",
+    "action": "Set to NaN and interpolated",
+    "count": 10,
+    "detail": [
+      "1991-10-17",
+      "1995-08-31",
+      "1996-01-02",
+      "1998-07-28",
+      "2003-08-10",
+      "2004-08-26",
+      "2004-11-21",
+      "2008-01-07",
+      "2011-07-15",
+      "2019-09-10"
+    ]
+  },
+  {
+    "dataset": "harangi",
+    "issue": "Missing values in 'pct'",
+    "action": "Linear interpolation for gaps <= 3 days; longer gaps left NaN",
+    "count": 20,
+    "detail": "20 filled, 0 left missing"
+  },
+  {
+    "dataset": "harangi",
+    "issue": "Missing values in 'storage'",
+    "action": "Linear interpolation for gaps <= 3 days; longer gaps left NaN",
+    "count": 20,
+    "detail": "20 filled, 0 left missing"
+  },
+  {
+    "dataset": "harangi",
+    "issue": "Missing values in 'inflow'",
+    "action": "Linear interpolation for gaps <= 3 days; longer gaps left NaN",
+    "count": 10,
+    "detail": "10 filled, 0 left missing"
+  },
+  {
+    "dataset": "harangi",
+    "issue": "Missing values in 'outflow'",
+    "action": "Linear interpolation for gaps <= 3 days; longer gaps left NaN",
+    "count": 1,
+    "detail": "1 filled, 0 left missing"
+  },
+  {
+    "dataset": "harangi",
+    "issue": "Outflow not in cusecs (decimal values, far too small; e.g. Jul-Sep 2019)",
+    "action": "Replaced with water-balance outflow: inflow - storage change",
+    "count": 89,
+    "detail": "2004-07-14 .. 2019-09-18; reported total 3.34 TMC -> 22.0 TMC"
+  },
+  {
+    "dataset": "harangi",
+    "issue": "Water-balance residual > 1 TMC/day (storage change vs inflow - outflow)",
+    "action": "Flagged only (likely evaporation/diversions or rounding); not modified",
+    "count": 19,
+    "detail": null
+  },
+  {
+    "dataset": "rainfall",
+    "issue": "Grid cells overlapping KRS watershed: 24",
+    "action": "Weighted each cell by the fraction of its area inside the watershed",
+    "count": 24,
+    "detail": null
+  },
+  {
+    "dataset": "merged",
+    "issue": "Reservoir data runs to 2026-10-17 but rainfall ends 2025-12-31",
+    "action": "Modelling window restricted to 1991-01-01 .. 2025-12-31",
+    "count": 290,
+    "detail": null
+  },
+  {
+    "dataset": "merged",
+    "issue": "Monsoon month with top-10% catchment rain but bottom-25% KRS inflow",
+    "action": "Flagged only (possible IMD grid issue or very dry soil); not modified",
+    "count": 1,
+    "detail": [
+      "Jun 2012: 533 mm, mean inflow 734 cusecs"
+    ]
+  }
+]

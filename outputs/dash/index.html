@@ -1,0 +1,840 @@
+<style>
+.kx { display: grid; gap: var(--cds-gap-lg); font-family: var(--font-anthropic-sans); }
+.kx-head h1 { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; text-wrap: balance; }
+.kx-head p { margin: var(--cds-gap-xs) 0 0; color: var(--color-fg-muted); max-width: 70ch; }
+.kx-tabs { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs); border-bottom: 1px solid var(--color-border-line); }
+.kx-tab { font: inherit; background: none; border: 0; border-bottom: 2px solid transparent; padding: var(--cds-pad-sm) var(--cds-pad-md); color: var(--color-fg-muted); cursor: pointer; }
+.kx-tab[aria-selected="true"] { color: var(--color-fg); border-bottom-color: var(--color-fg); }
+.kx-tab:focus-visible, .kx-seg button:focus-visible, .kx select:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+.kx-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: var(--cds-gap-md); }
+.kx-tile { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-md) var(--cds-pad-lg); display: grid; gap: var(--cds-gap-xs); align-content: start; }
+.kx-tile .lbl { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.kx-tile .big { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); font-variant-numeric: tabular-nums; min-height: 1.2em; }
+.kx-tile .sub { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.kx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: var(--cds-gap-md); }
+.kx-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: grid; gap: var(--cds-gap-sm); align-content: start; min-width: 0; }
+.kx-card.wide { grid-column: 1 / -1; }
+.kx-card h3 { margin: 0; font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); }
+.kx-card .note { margin: 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); max-width: 80ch; }
+.kx-chart { position: relative; min-height: 260px; }
+.kx-chart.tall { min-height: 320px; }
+.kx-chart svg { display: block; overflow: visible; }
+.kx-chart text { fill: var(--color-fg-muted); font-size: var(--cds-font-size-caption); font-family: var(--font-anthropic-sans); }
+.kx-chart .grid line { stroke: var(--cds-chart-grid); }
+.kx-chart .grid .domain { display: none; }
+.kx-chart .axis .domain, .kx-chart .axis line { stroke: var(--cds-chart-axis); }
+.kx-tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: var(--cds-pad-xs) var(--cds-pad-sm); font-size: var(--cds-font-size-caption); white-space: nowrap; z-index: 2; display: grid; gap: 2px; font-variant-numeric: tabular-nums; }
+.kx-tip .t { color: var(--cds-text-secondary); }
+.kx-tip .row { display: flex; align-items: center; gap: 6px; }
+.kx-tip .sw { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.kx-legend { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs) var(--cds-gap-md); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.kx-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.kx-legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.kx-legend i.dash { background-image: linear-gradient(90deg, currentColor 50%, transparent 50%) !important; background-size: 6px 3px; }
+.kx-controls { display: flex; flex-wrap: wrap; gap: var(--cds-gap-sm); align-items: center; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.kx-seg { display: inline-flex; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); overflow: hidden; }
+.kx-seg button { font: inherit; background: none; border: 0; padding: var(--cds-pad-xs) var(--cds-pad-sm); color: var(--color-fg-muted); cursor: pointer; }
+.kx-seg button[aria-pressed="true"] { background: var(--color-bg); color: var(--color-fg); }
+.kx select { font: inherit; padding: var(--cds-pad-xs) var(--cds-pad-sm); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background: var(--color-bg); color: var(--color-fg); }
+.kx-tablewrap { overflow: auto; max-height: 34rem; }
+.kx table { border-collapse: collapse; width: 100%; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+.kx th { position: sticky; top: 0; background: var(--color-panel); text-align: left; font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); border-bottom: 1px solid var(--color-border-line); padding: var(--cds-pad-xs) var(--cds-pad-sm); }
+.kx th button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.kx td { border-bottom: 1px solid var(--color-border-line); padding: var(--cds-pad-xs) var(--cds-pad-sm); vertical-align: top; }
+.kx td.num, .kx th.num { text-align: right; }
+.kx td.detail { color: var(--color-fg-muted); max-width: 28rem; }
+.kx-pill { display: inline-block; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--color-border-line); white-space: nowrap; }
+.kx-pill.fixed { color: var(--color-ok); }
+.kx-pill.flag { color: var(--color-warn); }
+.kx-pill.kept { color: var(--color-fg-muted); }
+.kx-search { font: inherit; padding: var(--cds-pad-xs) var(--cds-pad-sm); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background: var(--color-bg); color: var(--color-fg); min-width: 0; width: min(100%, 18rem); }
+.kx-take { font-size: var(--cds-font-size-body); max-width: 75ch; margin: 0; }
+.kx-take b, .kx-head b { font-weight: var(--cds-font-weight-medium); }
+[data-dash-source-state=empty] { color: transparent; }
+[data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+</style>
+
+<div class="kx">
+  <header class="kx-head" id="top">
+    <h1>KRS inflow and end-of-monsoon storage</h1>
+    <p>Krishnaraja Sagar, Cauvery basin. IMD 0.25° gridded rainfall over the KRS watershed, plus daily records for KRS and the two upstream dams, Harangi and Hemavathy, 1991–2025.</p>
+  </header>
+
+  <div class="kx-tiles" id="headline">
+    <div class="kx-tile">
+      <span class="lbl">Daily inflow model skill (NSE, test 2020–25)</span>
+      <span class="big dash-skeleton" data-source="inflow_metrics" data-field="NSE" data-where="model=Gradient boosting (rain %2B upstream)&amp;scope=Test 2020-2025, all days">—</span>
+      <span class="sub">Rain and upstream releases only. "Same as yesterday" scores <span data-source="inflow_metrics" data-field="NSE" data-where="model=Persistence (yesterday)&amp;scope=Test 2020-2025, all days">—</span></span>
+    </div>
+    <div class="kx-tile">
+      <span class="lbl">Typical delay, Harangi release to KRS</span>
+      <span class="big dash-skeleton" data-source="lag_peaks" data-field="peak_lag_days" data-where="series=Harangi release">—</span>
+      <span class="sub">days, at the model's peak response</span>
+    </div>
+    <div class="kx-tile">
+      <span class="lbl">KRS 30-Sep forecast error from 1 Sep</span>
+      <span class="big dash-skeleton" data-source="season_skill" data-field="rmse_tmc" data-where="target=KRS only&amp;model=Ridge: storage %2B flows&amp;issue_date=01 Sep">—</span>
+      <span class="sub">TMC RMSE. On 1 Jun it is <span data-source="season_skill" data-field="rmse_tmc" data-where="target=KRS only&amp;model=Ridge: storage %2B flows&amp;issue_date=01 Jun">—</span> TMC, no better than the long-term average</span>
+    </div>
+    <div class="kx-tile">
+      <span class="lbl">Data issues found and handled</span>
+      <span class="big dash-skeleton" data-source="fix_totals" data-field="issues" data-row="0">—</span>
+      <span class="sub"><span data-source="fix_totals" data-field="values_changed" data-row="0">—</span> values changed, the rest flagged or kept</span>
+    </div>
+  </div>
+
+  <nav class="kx-tabs" role="tablist" aria-label="Sections">
+    <button class="kx-tab" role="tab" id="tab-eda" data-page="eda" aria-selected="true">Explore the data</button>
+    <button class="kx-tab" role="tab" id="tab-fixes" data-page="fixes" aria-selected="false">Data fixes</button>
+    <button class="kx-tab" role="tab" id="tab-inflow" data-page="inflow" aria-selected="false">Daily inflow model</button>
+    <button class="kx-tab" role="tab" id="tab-season" data-page="season" aria-selected="false">30-Sep storage forecast</button>
+  </nav>
+
+  <section class="kx-page" id="eda" data-page="eda">
+    <div class="kx-grid">
+      <div class="kx-card" id="card-map">
+        <h3>Watershed and rainfall grid</h3>
+        <p class="note">The 24 IMD cells that overlap the KRS watershed, shaded by mean annual rainfall. The western (Ghats) cells get about twice the rain of those near the dam.</p>
+        <div class="kx-chart tall" id="chart-map" data-source="cells watershed"></div>
+      </div>
+      <div class="kx-card" id="card-scatter">
+        <h3>Monsoon rain vs monsoon inflow, by year</h3>
+        <p class="note">Jun–Sep basin rainfall (mm) against Jun–Sep KRS inflow volume (TMC). The relationship is strong but curved: wet years yield much more runoff per mm.</p>
+        <div class="kx-chart tall" id="chart-scatter" data-source="annual"></div>
+      </div>
+      <div class="kx-card" id="card-mrain">
+        <h3>Average monthly basin rainfall</h3>
+        <p class="note">Area-weighted mean over the watershed, mm per month, 1991–2025.</p>
+        <div class="kx-chart" id="chart-mrain" data-source="monthly"></div>
+      </div>
+      <div class="kx-card" id="card-mflow">
+        <h3>Average daily flows by month</h3>
+        <p class="note">KRS inflow and the two upstream releases that feed it, cusecs. Upstream releases make up a large share of KRS inflow.</p>
+        <div class="kx-legend" id="legend-mflow"></div>
+        <div class="kx-chart" id="chart-mflow" data-source="monthly"></div>
+      </div>
+      <div class="kx-card wide" id="card-sep30">
+        <h3>KRS storage on 30 September, each year</h3>
+        <p class="note">Gross storage in TMC. The dashed line is design capacity (49.45 TMC). This is the quantity the forecast tab predicts.</p>
+        <div class="kx-chart" id="chart-sep30" data-source="annual"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="kx-page" id="fixes" data-page="fixes" hidden>
+    <div class="kx-card wide" id="card-fixes">
+      <h3>Every data issue and what was done about it</h3>
+      <p class="note">From the cleaning step (src/prepare.py). <b>Fixed</b> means values were changed or filled; <b>Flagged</b> means reported but left as is; <b>Kept</b> means checked and judged plausible.</p>
+      <div class="kx-controls">
+        <input class="kx-search" id="fix-search" type="search" placeholder="Search issues" aria-label="Search issues">
+      </div>
+      <div class="kx-tablewrap">
+        <table id="table-fixes" data-source="fixes" data-row-key="id">
+          <thead><tr>
+            <th class="num" data-field="id"><button data-k="id">#</button></th>
+            <th data-field="dataset"><button data-k="dataset">Dataset</button></th>
+            <th data-field="issue"><button data-k="issue">Issue</button></th>
+            <th class="num" data-field="count"><button data-k="count">Count</button></th>
+            <th data-field="action"><button data-k="action">Action</button></th>
+            <th data-field="detail">Detail / example dates</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="kx-page" id="inflow" data-page="inflow" hidden>
+    <div class="kx-grid">
+      <div class="kx-card wide" id="card-hydro">
+        <h3>Observed vs predicted daily inflow, test years</h3>
+        <p class="note">Models trained on 1991–2019 and never shown 2020–2025. "Rain + upstream" uses only rainfall and Harangi/Hemavathy releases; "+ past KRS inflow" also sees the last week of KRS inflow.</p>
+        <div class="kx-controls">
+          <label for="hyear">Year</label>
+          <select id="hyear"></select>
+          <div class="kx-legend" id="legend-hydro"></div>
+        </div>
+        <div class="kx-chart tall" id="chart-hydro" data-source="hydrograph"></div>
+      </div>
+      <div class="kx-card" id="card-lagrain">
+        <h3>How much inflow 1 mm of rain produces, by delay</h3>
+        <p class="note">Extra KRS inflow (cusecs) from 1 mm of rain falling k days earlier on wet soil, by distance band. Response peaks after about 2 days and lasts about a week. Dashed: the same rain on dry soil.</p>
+        <div class="kx-legend" id="legend-lagrain"></div>
+        <div class="kx-chart" id="chart-lagrain" data-source="lag_response"></div>
+      </div>
+      <div class="kx-card" id="card-lagrel">
+        <h3>How upstream releases reach KRS, by delay</h3>
+        <p class="note">Cusecs arriving at KRS per cusec released upstream k days earlier. Most of the water arrives within 0–2 days.</p>
+        <div class="kx-legend" id="legend-lagrel"></div>
+        <div class="kx-chart" id="chart-lagrel" data-source="lag_response"></div>
+      </div>
+      <div class="kx-card" id="card-imp">
+        <h3>What the model relies on</h3>
+        <p class="note">Drop in test NSE when each group of inputs is shuffled. Soil wetness (rain over past weeks) matters most, ahead of any single day's rain.</p>
+        <div class="kx-chart" id="chart-imp" data-source="importance"></div>
+      </div>
+      <div class="kx-card" id="card-metrics">
+        <h3>Model scores, 2020–2025</h3>
+        <p class="note">NSE and KGE: 1 is perfect, 0 is no better than the average. RMSE and MAE in cusecs. Bias: % over (+) or under (−) total volume.</p>
+        <div class="kx-controls"><div class="kx-seg" id="seg-scope"></div></div>
+        <div class="kx-tablewrap">
+          <table id="table-metrics" data-source="inflow_metrics" data-row-key="model,scope">
+            <thead><tr>
+              <th data-field="model">Model</th>
+              <th class="num" data-field="NSE">NSE</th>
+              <th class="num" data-field="KGE">KGE</th>
+              <th class="num" data-field="RMSE">RMSE</th>
+              <th class="num" data-field="MAE">MAE</th>
+              <th class="num" data-field="bias_pct">Bias %</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="kx-page" id="season" data-page="season" hidden>
+    <div class="kx-grid">
+      <div class="kx-card wide" id="card-take">
+        <div class="kx-controls">
+          <span>Storage of</span>
+          <div class="kx-seg" id="seg-target"></div>
+        </div>
+        <p class="kx-take" id="season-take">How early can engineers know? Forecast error stays near the long-term-average baseline (<span data-source="season_skill" data-field="rmse_tmc" class="t-clim" data-where="target=KRS only&amp;model=Climatology (avg 30-Sep storage)&amp;issue_date=01 Jun">—</span> TMC) through July. It falls to <span data-source="season_skill" data-field="rmse_tmc" class="t-aug15" data-where="target=KRS only&amp;model=Ridge: storage %2B flows&amp;issue_date=15 Aug">—</span> TMC by 15 Aug and <span data-source="season_skill" data-field="rmse_tmc" class="t-sep15" data-where="target=KRS only&amp;model=Ridge: storage %2B flows&amp;issue_date=15 Sep">—</span> TMC by 15 Sep. <b>A reasonably informed estimate is possible from mid-August.</b> Before that, the outcome depends on rain that has not fallen yet.</p>
+      </div>
+      <div class="kx-card wide" id="card-skill">
+        <h3>Forecast error by forecast date</h3>
+        <p class="note">RMSE of the 30-Sep storage forecast, in TMC, by leave-one-year-out cross-validation over 1991–2025. Lower is better. Each model is refit for each forecast date.</p>
+        <div class="kx-legend" id="legend-skill"></div>
+        <div class="kx-chart tall" id="chart-skill" data-source="season_skill"></div>
+      </div>
+      <div class="kx-card wide" id="card-traj">
+        <h3>One year, forecast as the season unfolds</h3>
+        <p class="note">At each forecast date: storage that day, the forecast for 30 Sep with its 80% range, and what actually happened. 2026 uses the storage-and-flows model because 2026 rainfall grids are not available yet.</p>
+        <div class="kx-controls">
+          <label for="syear">Year</label>
+          <select id="syear"></select>
+          <div class="kx-legend" id="legend-traj"></div>
+        </div>
+        <div class="kx-chart tall" id="chart-traj" data-source="season_years"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+dash.calc('fix_totals', {
+  inputs: ['fixes'],
+  title: 'Data issue totals',
+  description: 'Number of issue types logged, and how many values were changed (excluding flagged, kept, header and date-range entries).',
+  fn: (fixes) => [{
+    issues: fixes.length,
+    values_changed: fixes.filter((f) => !/^(Flagged|Kept|Weighted|Modelling window|Detected header)/.test(f.action)).reduce((s, f) => s + Number(f.count), 0),
+  }],
+});
+dash.calc('lag_peaks', {
+  inputs: ['lag_response'],
+  title: 'Peak response delay',
+  description: 'For each input, the delay in days with the largest response on wet soil.',
+  fn: (lag_response) => {
+    const by = d3.group(lag_response, (r) => r.series);
+    return [...by].map(([series, rows]) => ({ series, peak_lag_days: d3.greatest(rows, (r) => Number(r.wet_soil)).lag_days }));
+  },
+});
+</script>
+
+<script>
+(function () {
+  const K = (window.KX = {});
+  K.fmt = d3.format(',');
+  K.fmt1 = d3.format(',.1f');
+  K.tip = (box) => {
+    let t = box.querySelector(':scope > .kx-tip');
+    if (!t) { t = document.createElement('div'); t.className = 'kx-tip'; t.hidden = true; box.appendChild(t); }
+    return {
+      show(title, rows, x, y) {
+        t.replaceChildren();
+        const h = document.createElement('div'); h.className = 't'; h.textContent = title; t.appendChild(h);
+        rows.forEach((r) => {
+          const row = document.createElement('div'); row.className = 'row';
+          if (r.color) { const s = document.createElement('span'); s.className = 'sw'; s.style.background = r.color; row.appendChild(s); }
+          const l = document.createElement('span'); l.textContent = r.label; row.appendChild(l);
+          t.appendChild(row);
+        });
+        t.hidden = false;
+        const bw = box.clientWidth, tw = t.offsetWidth, th = t.offsetHeight;
+        let left = x + 12; if (left + tw > bw) left = x - tw - 12; if (left < 0) left = 0;
+        let top = y - th - 8; if (top < 0) top = y + 12;
+        t.style.left = left + 'px'; t.style.top = top + 'px';
+      },
+      hide() { t.hidden = true; },
+    };
+  };
+  K.legend = (el, items) => {
+    el.replaceChildren(...items.map((it) => {
+      const s = document.createElement('span');
+      const i = document.createElement('i'); i.style.background = it.color; i.style.color = it.color;
+      if (it.dash) i.className = 'dash';
+      if (it.dot) { i.style.width = '8px'; i.style.height = '8px'; i.style.borderRadius = '50%'; }
+      s.append(i, document.createTextNode(it.label));
+      return s;
+    }));
+  };
+  K.status = (ids) => {
+    const st = ids.map((id) => dash.data(id).status);
+    if (st.every((s) => s === 'ok')) return 'ok';
+    if (st.some((s) => s === 'error' || s === 'connect')) return 'error';
+    return 'loading';
+  };
+  K.state = (box, ids) => {
+    const s = K.status(ids);
+    box.classList.toggle('dash-skeleton', s === 'loading');
+    if (s !== 'ok') {
+      box.replaceChildren();
+      if (s === 'error') {
+        const m = document.createElement('div');
+        m.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:6px;min-height:inherit;color:var(--color-fg-muted);font-size:var(--cds-font-size-caption)';
+        const dot = document.createElement('span'); dot.style.cssText = 'width:.375rem;height:.375rem;border-radius:50%;background:var(--color-bad)';
+        m.append(dot, document.createTextNode('Failed to load'));
+        box.appendChild(m);
+      }
+      return false;
+    }
+    return true;
+  };
+  K.svg = (box, h) => {
+    box.querySelectorAll(':scope > svg').forEach((s) => s.remove());
+    const w = Math.max(240, box.clientWidth);
+    const svg = d3.select(box).insert('svg', ':first-child').attr('width', '100%').attr('viewBox', `0 0 ${w} ${h}`).attr('height', h);
+    return { svg, w, h };
+  };
+  K.measure = (svg, labels) => {
+    const t = svg.append('text').attr('visibility', 'hidden');
+    let m = 0; labels.forEach((l) => { t.text(l); m = Math.max(m, t.node().getComputedTextLength()); });
+    t.remove(); return m;
+  };
+  K.axes = (svg, x, y, w, h, m, opts = {}) => {
+    const yTicks = y.ticks(opts.yTicks || 5);
+    svg.append('g').attr('class', 'grid').attr('transform', `translate(${m.l},0)`)
+      .call(d3.axisLeft(y).tickValues(yTicks).tickSize(-(w - m.l - m.r)).tickFormat(''))
+      .attr('font-size', null).attr('font-family', null);
+    svg.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`)
+      .call(d3.axisLeft(y).tickValues(yTicks).tickSize(0).tickPadding(6).tickFormat(opts.yFmt || K.fmt))
+      .attr('font-size', null).attr('font-family', null).call((g) => g.select('.domain').remove());
+    const xa = opts.xAxis || d3.axisBottom(x);
+    svg.append('g').attr('class', 'axis').attr('transform', `translate(0,${h - m.b})`)
+      .call(xa.tickSizeOuter(0)).attr('font-size', null).attr('font-family', null);
+    if (opts.yLabel) svg.append('text').attr('x', m.l).attr('y', m.t - 8).text(opts.yLabel);
+    if (opts.xLabel) svg.append('text').attr('x', w - m.r).attr('y', h - 4).attr('text-anchor', 'end').text(opts.xLabel);
+  };
+  K.colorVar = (name) => getComputedStyle(document.querySelector('.kx')).getPropertyValue(name).trim();
+  K.cssColor = (v) => {
+    if (!v.startsWith('var(')) return v;
+    return K.colorVar(v.slice(4, -1).split(',')[0].trim()) || v;
+  };
+  K.pages = {};
+  K.current = () => document.querySelector('.kx-tab[aria-selected="true"]').dataset.page;
+  K.drawAll = () => { const p = K.current(); (K.pages[p] || []).forEach((f) => f()); (K.pages.always || []).forEach((f) => f()); };
+  const show = (page) => {
+    document.querySelectorAll('.kx-tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.page === page)));
+    document.querySelectorAll('.kx-page').forEach((p) => { p.hidden = p.dataset.page !== page; });
+    dash.setLink(page);
+    K.drawAll();
+  };
+  K.show = show;
+  document.querySelectorAll('.kx-tab').forEach((t) => t.addEventListener('click', () => show(t.dataset.page)));
+  document.querySelector('.kx-tabs').addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const tabs = [...document.querySelectorAll('.kx-tab')];
+    const i = tabs.findIndex((t) => t.getAttribute('aria-selected') === 'true');
+    const n = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+    n.focus(); show(n.dataset.page);
+  });
+})();
+</script>
+
+<script>
+/* Headline tiles */
+const K = window.KX;
+dash.onData(() => {
+  document.querySelectorAll('#headline .big').forEach((el) => {
+    const s = el.dataset.source;
+    const st = dash.data(s).status;
+    el.classList.toggle('dash-skeleton', st === 'loading');
+  });
+  const pick = (id, where, field) => {
+    const d = dash.data(id);
+    if (d.status !== 'ok') return null;
+    const kv = where.split('&').map((p) => p.split('=').map(decodeURIComponent));
+    const row = d.data.find((r) => kv.every(([k, v]) => String(r[k]) === v));
+    return row ? row[field] : null;
+  };
+  document.querySelectorAll('#headline [data-source]').forEach((el) => {
+    const id = el.dataset.source, f = el.dataset.field;
+    let v = null;
+    if (el.dataset.where) v = pick(id, el.dataset.where, f);
+    else if (el.dataset.row != null) { const d = dash.data(id); if (d.status === 'ok') v = d.data[+el.dataset.row]?.[f]; }
+    el.textContent = v == null ? '—' : (typeof v === 'number' && !Number.isInteger(v) ? String(v) : K.fmt(v));
+  });
+});
+</script>
+
+<script>
+/* EDA page */
+(function () {
+  const K = window.KX;
+  const map = () => {
+    const box = document.getElementById('chart-map');
+    if (!K.state(box, ['cells', 'watershed'])) return;
+    const cells = dash.data('cells').data.map((c) => ({ ...c, lon: +c.lon, lat: +c.lat, rain: +c.rain_mm_yr }));
+    const ws = dash.data('watershed').data.map((p) => [+p.lon, +p.lat]);
+    const w0 = Math.max(240, box.clientWidth);
+    const lonR = [75.3, 76.8], latR = [11.8, 13.55];
+    const kx = Math.cos(12.6 * Math.PI / 180);
+    const aspect = (latR[1] - latR[0]) / ((lonR[1] - lonR[0]) * kx);
+    const h = Math.min(420, Math.max(260, w0 * aspect * 0.8));
+    const { svg, w } = K.svg(box, h + 40);
+    const pad = 8;
+    const s = Math.min((w - 2 * pad) / ((lonR[1] - lonR[0]) * kx), (h - 2 * pad) / (latR[1] - latR[0]));
+    const ox = (w - s * (lonR[1] - lonR[0]) * kx) / 2;
+    const X = (lon) => ox + (lon - lonR[0]) * kx * s, Y = (lat) => pad + (latR[1] - lat) * s;
+    const lo = K.cssColor('var(--cds-chart-muted)'), hi = K.cssColor(dash.colors[0]);
+    const ext = d3.extent(cells, (c) => c.rain);
+    const col = d3.scaleLinear().domain(ext).range([0, 1]);
+    const ramp = (v) => d3.interpolateRgb(lo, hi)(col(v));
+    const tip = K.tip(box);
+    svg.append('g').selectAll('rect').data(cells).join('rect')
+      .attr('x', (c) => X(c.lon - 0.125) + 1).attr('y', (c) => Y(c.lat + 0.125) + 1)
+      .attr('width', (c) => X(c.lon + 0.125) - X(c.lon - 0.125) - 2).attr('height', (c) => Y(c.lat - 0.125) - Y(c.lat + 0.125) - 2)
+      .attr('rx', 3).attr('fill', (c) => ramp(c.rain)).attr('fill-opacity', (c) => 0.35 + 0.65 * (+c.area_inside_pct / 100))
+      .on('pointermove', (e, c) => {
+        const [mx, my] = d3.pointer(e, box);
+        tip.show(`${c.lat.toFixed(2)}°N ${c.lon.toFixed(2)}°E`, [
+          { label: `${K.fmt(c.rain)} mm/yr rainfall` }, { label: `${c.area_inside_pct}% inside watershed` },
+          { label: `${c.dist_km} km from KRS dam (${c.band} band)` }], mx, my);
+      })
+      .on('pointerleave', () => tip.hide());
+    svg.append('path').attr('d', d3.line()(ws.map(([a, b]) => [X(a), Y(b)])) + 'Z')
+      .attr('fill', 'none').attr('stroke', 'var(--color-fg)').attr('stroke-width', 1.5).attr('pointer-events', 'none');
+    const dams = [['KRS', 76.575, 12.422], ['Harangi', 75.906, 12.49], ['Hemavathy', 76.06, 12.82]];
+    const g = svg.append('g').attr('pointer-events', 'none');
+    dams.forEach(([n, lon, lat]) => {
+      g.append('circle').attr('cx', X(lon)).attr('cy', Y(lat)).attr('r', 5).attr('fill', 'var(--color-fg)').attr('stroke', 'var(--color-panel)').attr('stroke-width', 2);
+      g.append('text').attr('x', X(lon) + 8).attr('y', Y(lat) + 4).attr('fill', 'var(--color-fg)').style('fill', 'var(--color-fg)').text(n);
+    });
+    // colour key
+    const kw = Math.min(180, w - 40), ky = h + 14;
+    const grad = svg.append('defs').append('linearGradient').attr('id', 'kx-ramp');
+    grad.append('stop').attr('offset', 0).style('stop-color', lo);
+    grad.append('stop').attr('offset', 1).style('stop-color', hi);
+    svg.append('rect').attr('x', 0).attr('y', ky).attr('width', kw).attr('height', 8).attr('rx', 4).attr('fill', 'url(#kx-ramp)');
+    svg.append('text').attr('x', 0).attr('y', ky + 22).text(`${K.fmt(ext[0])} mm/yr`);
+    svg.append('text').attr('x', kw).attr('y', ky + 22).attr('text-anchor', 'end').text(`${K.fmt(ext[1])}`);
+  };
+
+  const scatter = () => {
+    const box = document.getElementById('chart-scatter');
+    if (!K.state(box, ['annual'])) return;
+    const rows = dash.data('annual').data.map((r) => ({ year: +r.year, x: +r.monsoon_rain_mm, y: +r.krs_monsoon_inflow_tmc }));
+    const { svg, w, h } = K.svg(box, 320);
+    const x = d3.scaleLinear(d3.extent(rows, (r) => r.x), [0, 1]).nice();
+    const y = d3.scaleLinear([0, d3.max(rows, (r) => r.y)], [0, 1]).nice();
+    const m = { t: 22, r: 12, b: 34, l: 0 };
+    m.l = K.measure(svg, y.ticks(5).map(K.fmt)) + 12;
+    x.range([m.l, w - m.r]); y.range([h - m.b, m.t]);
+    K.axes(svg, x, y, w, h, m, { yLabel: 'Jun–Sep inflow, TMC', xLabel: 'Jun–Sep rain, mm', xAxis: d3.axisBottom(x).ticks(Math.max(3, Math.floor(w / 90))) });
+    const tip = K.tip(box);
+    const c = dash.colors[0];
+    svg.append('g').selectAll('circle').data(rows).join('circle')
+      .attr('cx', (r) => x(r.x)).attr('cy', (r) => y(r.y)).attr('r', 5)
+      .attr('fill', c).attr('fill-opacity', 0.85).attr('stroke', 'var(--color-panel)').attr('stroke-width', 2);
+    const ext = d3.extent(rows, (r) => r.y);
+    rows.filter((r) => r.y === ext[0] || r.y === ext[1]).forEach((r) => {
+      svg.append('text').attr('x', x(r.x) + 8).attr('y', y(r.y) + 4).text(r.year);
+    });
+    const del = d3.Delaunay.from(rows, (r) => x(r.x), (r) => y(r.y));
+    svg.append('rect').attr('x', m.l).attr('y', m.t).attr('width', w - m.l - m.r).attr('height', h - m.t - m.b).attr('fill', 'transparent')
+      .on('pointermove', (e) => {
+        const [px, py] = d3.pointer(e); const r = rows[del.find(px, py)];
+        const [bx, by] = d3.pointer(e, box);
+        tip.show(String(r.year), [{ label: `${K.fmt(r.x)} mm rain` }, { label: `${K.fmt1(r.y)} TMC inflow` }], bx, by);
+      }).on('pointerleave', () => tip.hide());
+  };
+
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const mrain = () => {
+    const box = document.getElementById('chart-mrain');
+    if (!K.state(box, ['monthly'])) return;
+    const rows = dash.data('monthly').data.map((r) => ({ m: MONTHS[+r.month - 1], v: +r.rain_mm }));
+    const { svg, w, h } = K.svg(box, 260);
+    const y = d3.scaleLinear([0, d3.max(rows, (r) => r.v)], [0, 1]).nice();
+    const m = { t: 22, r: 8, b: 26, l: K.measure(svg, y.ticks(5).map(K.fmt)) + 12 };
+    const x = d3.scaleBand(rows.map((r) => r.m), [m.l, w - m.r]).padding(0.3);
+    y.range([h - m.b, m.t]);
+    K.axes(svg, x, y, w, h, m, { yLabel: 'mm per month', xAxis: d3.axisBottom(x).tickValues(w < 420 ? MONTHS.filter((_, i) => i % 2 === 0) : MONTHS) });
+    const tip = K.tip(box);
+    svg.append('g').selectAll('rect').data(rows).join('rect')
+      .attr('x', (r) => x(r.m)).attr('width', x.bandwidth()).attr('y', (r) => y(r.v)).attr('height', (r) => y(0) - y(r.v))
+      .attr('rx', Math.min(4, x.bandwidth() / 2)).attr('fill', dash.colors[0])
+      .on('pointermove', (e, r) => { const [bx, by] = d3.pointer(e, box); tip.show(r.m, [{ label: `${K.fmt(r.v)} mm` }], bx, by); })
+      .on('pointerleave', () => tip.hide());
+  };
+
+  const mflow = () => {
+    const box = document.getElementById('chart-mflow');
+    const series = [
+      { k: 'krs_inflow_cusecs', label: 'KRS inflow', color: dash.colors[0] },
+      { k: 'harangi_outflow_cusecs', label: 'Harangi release', color: dash.colors[1] },
+      { k: 'hemavathy_outflow_cusecs', label: 'Hemavathy release', color: dash.colors[2] },
+    ];
+    K.legend(document.getElementById('legend-mflow'), series);
+    if (!K.state(box, ['monthly'])) return;
+    const rows = dash.data('monthly').data.map((r) => ({ ...r, month: +r.month }));
+    const { svg, w, h } = K.svg(box, 260);
+    const y = d3.scaleLinear([0, d3.max(rows, (r) => d3.max(series, (s) => +r[s.k]))], [0, 1]).nice();
+    const m = { t: 22, r: 8, b: 26, l: K.measure(svg, y.ticks(5).map(K.fmt)) + 12 };
+    const x = d3.scalePoint(d3.range(1, 13), [m.l + 8, w - m.r - 8]);
+    y.range([h - m.b, m.t]);
+    K.axes(svg, x, y, w, h, m, { yLabel: 'cusecs (daily mean)', xAxis: d3.axisBottom(x).tickFormat((d) => MONTHS[d - 1]).tickValues(w < 420 ? [1, 3, 5, 7, 9, 11] : d3.range(1, 13)) });
+    series.forEach((s) => {
+      svg.append('path').datum(rows).attr('fill', 'none').attr('stroke', s.color).attr('stroke-width', 2)
+        .attr('stroke-linecap', 'round').attr('stroke-linejoin', 'round')
+        .attr('d', d3.line((r) => x(r.month), (r) => y(+r[s.k])));
+    });
+    const tip = K.tip(box);
+    const rule = svg.append('line').attr('y1', m.t).attr('y2', h - m.b).attr('stroke', 'var(--cds-chart-reference)').attr('visibility', 'hidden');
+    svg.append('rect').attr('x', m.l).attr('y', m.t).attr('width', w - m.l - m.r).attr('height', h - m.t - m.b).attr('fill', 'transparent')
+      .on('pointermove', (e) => {
+        const [px] = d3.pointer(e);
+        const r = d3.least(rows, (d) => Math.abs(x(d.month) - px));
+        rule.attr('x1', x(r.month)).attr('x2', x(r.month)).attr('visibility', 'visible');
+        const [bx, by] = d3.pointer(e, box);
+        tip.show(MONTHS[r.month - 1], series.map((s) => ({ color: s.color, label: `${s.label}: ${K.fmt(+r[s.k])}` })), bx, by);
+      }).on('pointerleave', () => { tip.hide(); rule.attr('visibility', 'hidden'); });
+  };
+
+  const sep30 = () => {
+    const box = document.getElementById('chart-sep30');
+    if (!K.state(box, ['annual'])) return;
+    const rows = dash.data('annual').data.map((r) => ({ year: +r.year, v: +r.krs_sep30_tmc }));
+    const CAP = 49.45;
+    const { svg, w, h } = K.svg(box, 260);
+    const y = d3.scaleLinear([0, CAP * 1.05], [0, 1]).nice();
+    const m = { t: 22, r: 8, b: 26, l: K.measure(svg, y.ticks(5).map(K.fmt)) + 12 };
+    const x = d3.scaleBand(rows.map((r) => r.year), [m.l, w - m.r]).padding(0.25);
+    y.range([h - m.b, m.t]);
+    const step = w < 500 ? 10 : 5;
+    K.axes(svg, x, y, w, h, m, { yLabel: 'TMC on 30 Sep', xAxis: d3.axisBottom(x).tickValues(rows.map((r) => r.year).filter((yy) => yy % step === 0)) });
+    const tip = K.tip(box);
+    const lowCut = d3.quantile(rows.map((r) => r.v).sort(d3.ascending), 0.2);
+    svg.append('g').selectAll('rect').data(rows).join('rect')
+      .attr('x', (r) => x(r.year)).attr('width', x.bandwidth()).attr('y', (r) => y(r.v)).attr('height', (r) => y(0) - y(r.v))
+      .attr('rx', Math.min(4, x.bandwidth() / 2))
+      .attr('fill', (r) => (r.v <= lowCut ? 'var(--cds-chart-status-critical)' : dash.colors[0]))
+      .on('pointermove', (e, r) => { const [bx, by] = d3.pointer(e, box); tip.show(String(r.year), [{ label: `${K.fmt1(r.v)} TMC (${Math.round((r.v / CAP) * 100)}% full)` }], bx, by); })
+      .on('pointerleave', () => tip.hide());
+    svg.append('line').attr('x1', m.l).attr('x2', w - m.r).attr('y1', y(CAP)).attr('y2', y(CAP))
+      .attr('stroke', 'var(--cds-chart-reference)').attr('stroke-dasharray', '4 4').attr('pointer-events', 'none');
+    svg.append('text').attr('x', w - m.r).attr('y', y(CAP) - 6).attr('text-anchor', 'end').text('Capacity');
+  };
+  K.pages.eda = [map, scatter, mrain, mflow, sep30];
+})();
+</script>
+
+<script>
+/* Data fixes page */
+(function () {
+  const K = window.KX;
+  const state = { key: 'id', dir: 1, q: '' };
+  const kind = (a) => (/^Flagged/.test(a) ? ['Flagged', 'flag'] : /^Kept/.test(a) ? ['Kept', 'kept'] : ['Fixed', 'fixed']);
+  const draw = () => {
+    const tb = document.querySelector('#table-fixes tbody');
+    const d = dash.data('fixes');
+    if (d.status !== 'ok') { tb.replaceChildren(); return; }
+    let rows = d.data.slice();
+    const q = state.q.toLowerCase();
+    if (q) rows = rows.filter((r) => [r.dataset, r.issue, r.action, r.detail].join(' ').toLowerCase().includes(q));
+    const num = state.key === 'id' || state.key === 'count';
+    rows.sort((a, b) => state.dir * (num ? +a[state.key] - +b[state.key] : String(a[state.key]).localeCompare(String(b[state.key]))));
+    tb.replaceChildren(...rows.map((r) => {
+      const tr = document.createElement('tr');
+      const td = (txt, cls) => { const c = document.createElement('td'); if (cls) c.className = cls; c.textContent = txt; return c; };
+      const [lab, cls] = kind(r.action);
+      const act = document.createElement('td');
+      const pill = document.createElement('span'); pill.className = `kx-pill ${cls}`; pill.textContent = lab;
+      act.append(pill, document.createTextNode(' ' + r.action));
+      tr.append(td(String(r.id), 'num'), td(r.dataset), td(r.issue), td(K.fmt(+r.count), 'num'), act, td(r.detail || '', 'detail'));
+      return tr;
+    }));
+    document.querySelectorAll('#table-fixes th').forEach((th) => {
+      const b = th.querySelector('button');
+      th.setAttribute('aria-sort', b && b.dataset.k === state.key ? (state.dir > 0 ? 'ascending' : 'descending') : 'none');
+    });
+  };
+  document.querySelectorAll('#table-fixes th button').forEach((b) => b.addEventListener('click', () => {
+    state.dir = state.key === b.dataset.k ? -state.dir : 1; state.key = b.dataset.k; draw();
+  }));
+  document.getElementById('fix-search').addEventListener('input', (e) => { state.q = e.target.value; draw(); });
+  K.pages.fixes = [draw];
+})();
+</script>
+
+<script>
+/* Inflow page */
+(function () {
+  const K = window.KX;
+  const ui = { year: null, scope: 'Test 2020-2025, all days' };
+  const hydro = () => {
+    const box = document.getElementById('chart-hydro');
+    const sel = document.getElementById('hyear');
+    const series = [
+      { k: 'observed', label: 'Observed', color: 'var(--color-fg)' },
+      { k: 'gb', label: 'Rain + upstream', color: dash.colors[0] },
+      { k: 'gb_ar', label: '+ past KRS inflow', color: dash.colors[1] },
+      { k: 'climatology', label: 'Long-term average', color: 'var(--cds-chart-muted)', dash: true },
+    ];
+    K.legend(document.getElementById('legend-hydro'), series);
+    if (!K.state(box, ['hydrograph'])) return;
+    const all = dash.data('hydrograph').data;
+    const years = [...new Set(all.map((r) => r.date.slice(0, 4)))];
+    if (!ui.year) ui.year = years.includes('2024') ? '2024' : years[years.length - 1];
+    if (sel.options.length !== years.length) sel.replaceChildren(...years.map((y) => new Option(y, y)));
+    sel.value = ui.year;
+    const rows = all.filter((r) => r.date.startsWith(ui.year)).map((r) => ({ ...r, t: new Date(r.date) }));
+    const { svg, w, h } = K.svg(box, 320);
+    const y = d3.scaleLinear([0, d3.max(rows, (r) => d3.max(series, (s) => +r[s.k] || 0))], [0, 1]).nice();
+    const m = { t: 22, r: 8, b: 26, l: K.measure(svg, y.ticks(5).map(K.fmt)) + 12 };
+    const x = d3.scaleUtc(d3.extent(rows, (r) => r.t), [m.l, w - m.r]);
+    y.range([h - m.b, m.t]);
+    K.axes(svg, x, y, w, h, m, { yLabel: 'KRS inflow, cusecs', xAxis: d3.axisBottom(x).ticks(w < 500 ? 4 : 8).tickFormat(d3.utcFormat('%b')) });
+    series.slice().reverse().forEach((s) => {
+      svg.append('path').datum(rows).attr('fill', 'none').attr('stroke', s.color).attr('stroke-width', s.k === 'observed' ? 1.5 : 2)
+        .attr('stroke-dasharray', s.dash ? '4 4' : null).attr('stroke-linejoin', 'round').attr('stroke-linecap', 'round')
+        .attr('d', d3.line((r) => x(r.t), (r) => y(+r[s.k])).defined((r) => r[s.k] != null));
+    });
+    const tip = K.tip(box);
+    const rule = svg.append('line').attr('y1', m.t).attr('y2', h - m.b).attr('stroke', 'var(--cds-chart-reference)').attr('visibility', 'hidden');
+    const bis = d3.bisector((r) => r.t).center;
+    svg.append('rect').attr('x', m.l).attr('y', m.t).attr('width', w - m.l - m.r).attr('height', h - m.t - m.b).attr('fill', 'transparent')
+      .on('pointermove', (e) => {
+        const [px] = d3.pointer(e); const r = rows[bis(rows, x.invert(px))];
+        rule.attr('x1', x(r.t)).attr('x2', x(r.t)).attr('visibility', 'visible');
+        const [bx, by] = d3.pointer(e, box);
+        tip.show(d3.utcFormat('%b %-d, %Y')(r.t), series.map((s) => ({ color: K.cssColor(s.color), label: `${s.label}: ${r[s.k] == null ? '–' : K.fmt(+r[s.k])}` })), bx, by);
+      }).on('pointerleave', () => { tip.hide(); rule.attr('visibility', 'hidden'); });
+  };
+  document.getElementById('hyear').addEventListener('change', (e) => { ui.year = e.target.value; hydro(); });
+
+  const lagChart = (boxId, legendId, kind, unit, fmt) => () => {
+    const box = document.getElementById(boxId);
+    const all = dash.data('lag_response');
+    const names = kind === 'rain' ? ['Rain, near band', 'Rain, mid band', 'Rain, far band (Ghats)'] : ['Harangi release', 'Hemavathy release'];
+    const series = names.map((n, i) => ({ n, label: n, color: dash.colors[i] }));
+    K.legend(document.getElementById(legendId), kind === 'rain' ? [...series, { label: 'Dry soil', color: 'var(--cds-chart-muted)', dash: true }] : series);
+    if (!K.state(box, ['lag_response'])) return;
+    const rows = all.data.filter((r) => r.kind === kind).map((r) => ({ ...r, lag: +r.lag_days, wet: +r.wet_soil, dry: +r.dry_soil }));
+    const { svg, w, h } = K.svg(box, 260);
+    const y = d3.scaleLinear([0, d3.max(rows, (r) => r.wet)], [0, 1]).nice();
+    const m = { t: 22, r: 8, b: 30, l: K.measure(svg, y.ticks(5).map(fmt)) + 12 };
+    const x = d3.scaleLinear(d3.extent(rows, (r) => r.lag), [m.l + 4, w - m.r - 4]);
+    y.range([h - m.b, m.t]);
+    K.axes(svg, x, y, w, h, m, { yLabel: unit, xLabel: 'days of delay', yFmt: fmt, xAxis: d3.axisBottom(x).ticks(10).tickFormat(d3.format('d')) });
+    series.forEach((s) => {
+      const d = rows.filter((r) => r.series === s.n);
+      if (kind === 'rain') svg.append('path').datum(d).attr('fill', 'none').attr('stroke', s.color).attr('stroke-opacity', 0.45).attr('stroke-width', 1.5).attr('stroke-dasharray', '4 4')
+        .attr('d', d3.line((r) => x(r.lag), (r) => y(r.dry)));
+      svg.append('path').datum(d).attr('fill', 'none').attr('stroke', s.color).attr('stroke-width', 2).attr('stroke-linejoin', 'round').attr('stroke-linecap', 'round')
+        .attr('d', d3.line((r) => x(r.lag), (r) => y(r.wet)));
+      svg.append('g').selectAll('circle').data(d).join('circle').attr('cx', (r) => x(r.lag)).attr('cy', (r) => y(r.wet)).attr('r', 3).attr('fill', s.color);
+    });
+    const tip = K.tip(box);
+    const rule = svg.append('line').attr('y1', m.t).attr('y2', h - m.b).attr('stroke', 'var(--cds-chart-reference)').attr('visibility', 'hidden');
+    svg.append('rect').attr('x', m.l).attr('y', m.t).attr('width', w - m.l - m.r).attr('height', h - m.t - m.b).attr('fill', 'transparent')
+      .on('pointermove', (e) => {
+        const [px] = d3.pointer(e); const lag = Math.round(x.invert(px));
+        const cl = Math.max(0, Math.min(d3.max(rows, (r) => r.lag), lag));
+        rule.attr('x1', x(cl)).attr('x2', x(cl)).attr('visibility', 'visible');
+        const [bx, by] = d3.pointer(e, box);
+        tip.show(`${cl} day${cl === 1 ? '' : 's'} later`, series.map((s) => {
+          const r = rows.find((q) => q.series === s.n && q.lag === cl);
+          return { color: s.color, label: `${s.label}: ${fmt(r.wet)}${kind === 'rain' ? ` (dry ${fmt(r.dry)})` : ''}` };
+        }), bx, by);
+      }).on('pointerleave', () => { tip.hide(); rule.attr('visibility', 'hidden'); });
+  };
+
+  const imp = () => {
+    const box = document.getElementById('chart-imp');
+    if (!K.state(box, ['importance'])) return;
+    const rows = dash.data('importance').data.map((r) => ({ g: r.feature_group, v: +r.nse_drop })).sort((a, b) => b.v - a.v);
+    const { svg, w } = K.svg(box, rows.length * 30 + 30);
+    const lw = Math.min(K.measure(svg, rows.map((r) => r.g)) + 10, w * 0.5);
+    const x = d3.scaleLinear([0, d3.max(rows, (r) => r.v)], [lw, w - 48]);
+    const y = d3.scaleBand(rows.map((r) => r.g), [6, rows.length * 30 + 6]).padding(0.3);
+    const tip = K.tip(box);
+    svg.append('g').selectAll('text').data(rows).join('text').attr('x', lw - 8).attr('y', (r) => y(r.g) + y.bandwidth() / 2 + 4).attr('text-anchor', 'end').text((r) => r.g);
+    svg.append('g').selectAll('rect').data(rows).join('rect').attr('x', lw).attr('y', (r) => y(r.g)).attr('height', y.bandwidth())
+      .attr('width', (r) => Math.max(2, x(r.v) - lw)).attr('rx', 4).attr('fill', (r, i) => (i === 0 ? dash.colors[0] : 'var(--cds-chart-muted)'))
+      .on('pointermove', (e, r) => { const [bx, by] = d3.pointer(e, box); tip.show(r.g, [{ label: `NSE drops by ${r.v.toFixed(3)} when shuffled` }], bx, by); })
+      .on('pointerleave', () => tip.hide());
+    svg.append('g').selectAll('text.v').data(rows).join('text').attr('class', 'v').attr('x', (r) => x(r.v) + 6).attr('y', (r) => y(r.g) + y.bandwidth() / 2 + 4).text((r) => r.v.toFixed(2));
+  };
+
+  const seg = document.getElementById('seg-scope');
+  const scopes = [['Test 2020-2025, all days', 'All days'], ['Test 2020-2025, Jun-Sep', 'Jun–Sep only']];
+  seg.replaceChildren(...scopes.map(([v, l]) => {
+    const b = document.createElement('button'); b.textContent = l; b.dataset.v = v;
+    b.addEventListener('click', () => { ui.scope = v; metrics(); }); return b;
+  }));
+  const metrics = () => {
+    seg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === ui.scope)));
+    const tb = document.querySelector('#table-metrics tbody');
+    const d = dash.data('inflow_metrics');
+    if (d.status !== 'ok') { tb.replaceChildren(); return; }
+    const rows = d.data.filter((r) => r.scope === ui.scope);
+    tb.replaceChildren(...rows.map((r) => {
+      const tr = document.createElement('tr'); tr.dataset.key = `${encodeURIComponent(r.model)},${encodeURIComponent(r.scope)}`;
+      const td = (t, c) => { const e = document.createElement('td'); if (c) e.className = c; e.textContent = t; return e; };
+      tr.append(td(r.model), td(String(r.NSE), 'num'), td(String(r.KGE), 'num'), td(K.fmt(+r.RMSE), 'num'), td(K.fmt(+r.MAE), 'num'), td(String(r.bias_pct), 'num'));
+      return tr;
+    }));
+  };
+  K.pages.inflow = [hydro, lagChart('chart-lagrain', 'legend-lagrain', 'rain', 'cusecs per mm', d3.format(',.0f')),
+    lagChart('chart-lagrel', 'legend-lagrel', 'release', 'cusecs per cusec', d3.format('.2f')), imp, metrics];
+})();
+</script>
+
+<script>
+/* Season page */
+(function () {
+  const K = window.KX;
+  const ui = { year: null };
+  const MODELS = [
+    { n: 'Climatology (avg 30-Sep storage)', label: 'Long-term average', color: 'var(--cds-chart-muted)', dash: true },
+    { n: 'Current storage + avg change', label: 'Storage today + usual change', color: dash.colors[2] },
+    { n: 'Ridge: storage + flows', label: 'Ridge: storage + flows', color: dash.colors[0] },
+    { n: 'Ridge: storage + flows + rainfall', label: 'Ridge: + rainfall', color: dash.colors[1] },
+    { n: 'Gradient boosting: storage + flows + rainfall', label: 'Gradient boosting: + rainfall', color: dash.colors[3] },
+  ];
+  const segT = document.getElementById('seg-target');
+  segT.replaceChildren(...['KRS only', 'All 3 dams'].map((v) => {
+    const b = document.createElement('button'); b.textContent = v; b.dataset.v = v;
+    b.addEventListener('click', () => dash.setParams({ target: v })); return b;
+  }));
+  const target = () => dash.params().target || 'KRS only';
+
+  const take = () => {
+    segT.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === target())));
+    const d = dash.data('season_skill');
+    const set = (cls, model, iss) => {
+      const el = document.querySelector(`#season-take .${cls}`);
+      el.setAttribute('data-where', `target=${target()}&model=${model.replace(/\+/g, '%2B')}&issue_date=${iss}`);
+      if (d.status !== 'ok') { el.textContent = '—'; return; }
+      const r = d.data.find((q) => q.target === target() && q.model === model && q.issue_date === iss);
+      el.textContent = r ? String(r.rmse_tmc) : '—';
+    };
+    set('t-clim', 'Climatology (avg 30-Sep storage)', '01 Jun');
+    set('t-aug15', 'Ridge: storage + flows', '15 Aug');
+    set('t-sep15', 'Ridge: storage + flows', '15 Sep');
+  };
+
+  const skill = () => {
+    const box = document.getElementById('chart-skill');
+    K.legend(document.getElementById('legend-skill'), MODELS);
+    if (!K.state(box, ['season_skill'])) return;
+    const rows = dash.data('season_skill').data.filter((r) => r.target === target());
+    const issues = [...new Map(rows.map((r) => [+r.issue_order, r.issue_date])).entries()].sort((a, b) => a[0] - b[0]).map((e) => e[1]);
+    const { svg, w, h } = K.svg(box, 320);
+    const y = d3.scaleLinear([0, d3.max(rows, (r) => +r.rmse_tmc)], [0, 1]).nice();
+    const m = { t: 22, r: 8, b: 26, l: K.measure(svg, y.ticks(5).map(K.fmt)) + 12 };
+    const x = d3.scalePoint(issues, [m.l + 12, w - m.r - 12]);
+    y.range([h - m.b, m.t]);
+    K.axes(svg, x, y, w, h, m, { yLabel: 'RMSE, TMC (lower is better)', xAxis: d3.axisBottom(x).tickValues(w < 480 ? issues.filter((_, i) => i % 2 === 0) : issues) });
+    MODELS.forEach((s) => {
+      const d = rows.filter((r) => r.model === s.n).sort((a, b) => a.issue_order - b.issue_order);
+      svg.append('path').datum(d).attr('fill', 'none').attr('stroke', s.color).attr('stroke-width', 2).attr('stroke-dasharray', s.dash ? '4 4' : null)
+        .attr('stroke-linejoin', 'round').attr('stroke-linecap', 'round').attr('d', d3.line((r) => x(r.issue_date), (r) => y(+r.rmse_tmc)));
+      if (!s.dash) svg.append('g').selectAll('circle').data(d).join('circle').attr('cx', (r) => x(r.issue_date)).attr('cy', (r) => y(+r.rmse_tmc)).attr('r', 3.5).attr('fill', s.color);
+    });
+    const tip = K.tip(box);
+    const rule = svg.append('line').attr('y1', m.t).attr('y2', h - m.b).attr('stroke', 'var(--cds-chart-reference)').attr('visibility', 'hidden');
+    svg.append('rect').attr('x', m.l).attr('y', m.t).attr('width', w - m.l - m.r).attr('height', h - m.t - m.b).attr('fill', 'transparent')
+      .on('pointermove', (e) => {
+        const [px] = d3.pointer(e); const iss = d3.least(issues, (i) => Math.abs(x(i) - px));
+        rule.attr('x1', x(iss)).attr('x2', x(iss)).attr('visibility', 'visible');
+        const [bx, by] = d3.pointer(e, box);
+        tip.show(`Forecast made on ${iss}`, MODELS.map((s) => {
+          const r = rows.find((q) => q.model === s.n && q.issue_date === iss);
+          return { color: K.cssColor(s.color), label: `${s.label}: ${r ? K.fmt1(+r.rmse_tmc) : '–'} TMC` };
+        }), bx, by);
+      }).on('pointerleave', () => { tip.hide(); rule.attr('visibility', 'hidden'); });
+  };
+
+  const traj = () => {
+    const box = document.getElementById('chart-traj');
+    const sel = document.getElementById('syear');
+    const leg = [
+      { label: 'Storage on forecast date', color: 'var(--cds-chart-muted)' },
+      { label: 'Forecast for 30 Sep', color: dash.colors[0] },
+      { label: 'Storage today + usual change', color: dash.colors[2], dash: true },
+      { label: 'Actual 30 Sep', color: 'var(--color-fg)', dash: true },
+    ];
+    K.legend(document.getElementById('legend-traj'), leg);
+    if (!K.state(box, ['season_years'])) return;
+    const all = dash.data('season_years').data.filter((r) => r.target === target());
+    const years = [...new Set(all.map((r) => +r.year))].sort((a, b) => b - a);
+    if (!ui.year) ui.year = years.includes(2025) ? 2025 : years[0];
+    if (sel.options.length !== years.length) sel.replaceChildren(...years.map((y) => new Option(String(y), String(y))));
+    sel.value = String(ui.year);
+    const rows = all.filter((r) => +r.year === ui.year).sort((a, b) => a.issue_order - b.issue_order);
+    const issues = rows.map((r) => r.issue_date);
+    const actual = +rows[0].actual_sep30_tmc;
+    const { svg, w, h } = K.svg(box, 320);
+    const top = d3.max(rows, (r) => Math.max(+r.high_tmc, +r.forecast_tmc, actual, +r.storage_now_tmc));
+    const y = d3.scaleLinear([0, top], [0, 1]).nice();
+    const m = { t: 22, r: 8, b: 26, l: K.measure(svg, y.ticks(5).map(K.fmt)) + 12 };
+    const x = d3.scalePoint(issues, [m.l + 16, w - m.r - 70]);
+    y.range([h - m.b, m.t]);
+    K.axes(svg, x, y, w, h, m, { yLabel: 'storage, TMC', xAxis: d3.axisBottom(x).tickValues(w < 480 ? issues.filter((_, i) => i % 2 === 0) : issues) });
+    svg.append('path').datum(rows).attr('fill', dash.colors[0]).attr('fill-opacity', 0.14)
+      .attr('d', d3.area((r) => x(r.issue_date), (r) => y(+r.low_tmc), (r) => y(+r.high_tmc)));
+    svg.append('line').attr('x1', m.l).attr('x2', w - m.r).attr('y1', y(actual)).attr('y2', y(actual)).attr('stroke', 'var(--color-fg)').attr('stroke-dasharray', '4 4');
+    svg.append('text').attr('x', w - m.r).attr('y', y(actual) - 6).attr('text-anchor', 'end').text(`Actual ${K.fmt1(actual)}`);
+    const line = (k, color, dashed) => {
+      const d = rows.filter((r) => r[k] != null);
+      svg.append('path').datum(d).attr('fill', 'none').attr('stroke', color).attr('stroke-width', 2).attr('stroke-dasharray', dashed ? '4 4' : null)
+        .attr('stroke-linejoin', 'round').attr('stroke-linecap', 'round').attr('d', d3.line((r) => x(r.issue_date), (r) => y(+r[k])));
+      svg.append('g').selectAll('circle').data(d).join('circle').attr('cx', (r) => x(r.issue_date)).attr('cy', (r) => y(+r[k])).attr('r', 3.5).attr('fill', color);
+    };
+    line('storage_now_tmc', 'var(--cds-chart-muted)');
+    line('baseline_tmc', dash.colors[2], true);
+    line('forecast_tmc', dash.colors[0]);
+    const tip = K.tip(box);
+    const rule = svg.append('line').attr('y1', m.t).attr('y2', h - m.b).attr('stroke', 'var(--cds-chart-reference)').attr('visibility', 'hidden');
+    svg.append('rect').attr('x', m.l).attr('y', m.t).attr('width', w - m.l - m.r).attr('height', h - m.t - m.b).attr('fill', 'transparent')
+      .on('pointermove', (e) => {
+        const [px] = d3.pointer(e); const r = d3.least(rows, (q) => Math.abs(x(q.issue_date) - px));
+        rule.attr('x1', x(r.issue_date)).attr('x2', x(r.issue_date)).attr('visibility', 'visible');
+        const [bx, by] = d3.pointer(e, box);
+        const lines = [
+          { color: K.cssColor('var(--cds-chart-muted)'), label: `Storage that day: ${K.fmt1(+r.storage_now_tmc)} TMC` },
+          { color: K.cssColor(dash.colors[0]), label: `Forecast: ${K.fmt1(+r.forecast_tmc)} TMC (80% range ${K.fmt1(+r.low_tmc)}–${K.fmt1(+r.high_tmc)})` },
+        ];
+        if (r.baseline_tmc != null) lines.push({ color: K.cssColor(dash.colors[2]), label: `Today + usual change: ${K.fmt1(+r.baseline_tmc)} TMC` });
+        lines.push({ color: K.cssColor('var(--color-fg)'), label: `Actual 30 Sep: ${K.fmt1(actual)} TMC` });
+        tip.show(`${ui.year}, forecast made ${r.issue_date}`, lines, bx, by);
+      }).on('pointerleave', () => { tip.hide(); rule.attr('visibility', 'hidden'); });
+  };
+  document.getElementById('syear').addEventListener('change', (e) => { ui.year = +e.target.value; traj(); });
+  K.pages.season = [take, skill, traj];
+})();
+</script>
+
+<script>
+(function () {
+  const K = window.KX;
+  dash.onData(() => K.drawAll());
+  const named = location.hash.slice(1);
+  if (['eda', 'fixes', 'inflow', 'season'].includes(named)) K.show(named);
+})();
+</script>

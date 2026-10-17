@@ -1,4 +1,4 @@
-# Allowlist: only the analysis scripts, report build files and the final report are tracked.
+# Allowlist: analysis scripts, all reports and their result files (outputs/) are tracked.
 # Data, hackathon material, credentials and environments stay out.
 /*
 !/.gitignore
@@ -6,9 +6,5 @@
 !/README.md
 !/src/
 !/outputs/
-/outputs/*
-!/outputs/KRS_insights.html
-!/outputs/Hemavathy_insights.html
 /src/__pycache__/
-!/outputs/final_report.html
-!/outputs/presentation.html
+.DS_Store
